@@ -1,0 +1,44 @@
+{
+  "1_after_2": {
+    "task_id": 1,
+    "new_task_id": 2,
+    "before_performance": 200.58,
+    "after_performance": 127.2,
+    "cf": -73.38000000000001
+  },
+  "1_after_3": {
+    "task_id": 1,
+    "new_task_id": 3,
+    "before_performance": 200.58,
+    "after_performance": 220.3,
+    "cf": 19.72
+  },
+  "2_after_3": {
+    "task_id": 2,
+    "new_task_id": 3,
+    "before_performance": 201.87,
+    "after_performance": 142.2,
+    "cf": -59.670000000000016
+  },
+  "1_after_4": {
+    "task_id": 1,
+    "new_task_id": 4,
+    "before_performance": 200.58,
+    "after_performance": 131.6,
+    "cf": -68.98000000000002
+  },
+  "2_after_4": {
+    "task_id": 2,
+    "new_task_id": 4,
+    "before_performance": 201.87,
+    "after_performance": 144.6,
+    "cf": -57.27000000000001
+  },
+  "3_after_4": {
+    "task_id": 3,
+    "new_task_id": 4,
+    "before_performance": 200.19,
+    "after_performance": 220.7,
+    "cf": 20.50999999999999
+  }
+}

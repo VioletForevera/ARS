@@ -1,0 +1,114 @@
+# CartPole持续学习配置文件
+
+# 环境配置
+environment:
+  name: "CartPole-v1"
+  render_mode: null
+  max_episode_steps: 500
+
+# Task Configuration
+tasks:
+
+  
+  - id: 1
+    name: "T1: short+no wind"
+    length: 0.5
+    wind: 0.0
+    description: "短杆长度，无风力干扰"
+  
+  - id: 2
+    name: "T2: short+wind"
+    length: 0.5
+    wind: 0.2
+    description: "短杆长度，有风力干扰"
+  
+  - id: 3
+    name: "T3: long+no wind"
+    length: 0.8
+    wind: 0.0
+    description: "长杆长度，无风力干扰"
+  
+  - id: 4
+    name: "T4: long+wind"
+    length: 0.8
+    wind: 0.2
+    description: "长杆长度，有风力干扰"
+
+# 智能代理配置
+agent:
+  type: "dqn"  # Deep Q-Network 
+  state_dim: 4
+  action_dim: 2
+  hidden_dim: 64
+  lr: 0.001
+  gamma: 0.99
+  epsilon: 0.1
+  epsilon_decay: 0.995
+  epsilon_min: 0.01
+  batch_size: 32
+  memory_size: 10000
+
+# 训练配置
+training:
+  seed: 42  # 添加随机种子设置
+  episodes: 1000
+  max_steps: 500
+  save_freq: 100
+  eval_freq: 50
+  
+  # 收敛配置
+  convergence:
+    threshold: 0.95
+    patience: 100
+    min_episodes: 50
+
+# 评估配置
+evaluation:
+  episodes: 10
+  save_results: true
+  plot_curves: true
+  
+  # 灾难性遗忘评估
+  catastrophic_forgetting:
+    enabled: true
+    test_frequency: 50
+    episodes_per_test: 5
+
+# 持续学习配置
+continual_learning:
+  enabled: false  # 默认禁用
+  mechanisms:
+    - "ewc"
+    - "entropy_trigger"
+  
+  # EWC配置
+  ewc:
+    enabled: false
+    importance: 1000.0
+  
+  # 熵触发配置
+  entropy_trigger:
+    enabled: false
+    threshold: 0.1
+
+# 监控配置
+monitoring:
+  metrics:
+    enabled: true
+    track_convergence: true
+    track_forgetting: true
+    plot_curves: true
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  console: true
+  file: true
+
+# 输出配置
+output:
+  save_dir: "runs"
+  model_dir: "models"
+  plot_dir: "plots"
+  log_dir: "logs"

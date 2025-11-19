@@ -1,0 +1,113 @@
+# MountainCar持续学习配置文件
+
+# 环境配置
+environment:
+  name: "MountainCar-v0"
+  render_mode: null
+  max_episode_steps: 200
+
+# 任务配置
+tasks:
+  - id: 1
+    name: "T1: 标准重力+标准推力"
+    gravity: 0.0025
+    force_mag: 0.001
+    description: "标准重力和推力"
+  
+  - id: 2
+    name: "T2: 增强重力+标准推力"
+    gravity: 0.0035
+    force_mag: 0.001
+    description: "增强重力，标准推力"
+  
+  - id: 3
+    name: "T3: 标准重力+增强推力"
+    gravity: 0.0025
+    force_mag: 0.0015
+    description: "标准重力，增强推力"
+  
+  - id: 4
+    name: "T4: 增强重力+增强推力"
+    gravity: 0.0035
+    force_mag: 0.0015
+    description: "增强重力和推力"
+
+# 智能代理配置
+agent:
+  type: "dqn"
+  state_dim: 2
+  action_dim: 3
+  hidden_dim: 256  # 增加网络容量
+  lr: 0.0005       # 降低学习率
+  gamma: 0.99
+  epsilon: 0.1
+  epsilon_decay: 0.995
+  epsilon_min: 0.05  # 保持更多探索
+  batch_size: 64     # 增加批次大小
+  memory_size: 50000 # 增加经验回放缓冲区
+
+# 训练配置
+training:
+  seed: 42
+  episodes: 2000      # 增加训练回合数
+  max_steps: 200
+  save_freq: 100
+  eval_freq: 50
+  
+  # 收敛配置 (MountainCar目标奖励约-110到-200之间)
+  convergence:
+    threshold: -110   # 提高收敛标准
+    patience: 200     # 增加耐心值
+    min_episodes: 100 # 增加最小回合数
+
+# 评估配置
+evaluation:
+  episodes: 10
+  save_results: true
+  plot_curves: true
+  
+  # 灾难性遗忘评估
+  catastrophic_forgetting:
+    enabled: true
+    test_frequency: 50
+    episodes_per_test: 5
+
+# 持续学习配置
+continual_learning:
+  enabled: true
+  mechanisms:
+    - "ewc"
+    - "entropy_trigger"
+  
+  # EWC配置
+  ewc:
+    enabled: true
+    importance: 10000.0  # 增加重要性权重
+  
+  # 熵触发配置
+  entropy_trigger:
+    enabled: true
+    threshold: 0.1
+
+# 监控配置
+monitoring:
+  metrics:
+    enabled: true
+    track_convergence: true
+    track_forgetting: true
+    plot_curves: true
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  console: true
+  file: true
+
+# 输出配置
+output:
+  save_dir: "runs"
+  model_dir: "models"
+  plot_dir: "plots"
+  log_dir: "logs"
+
