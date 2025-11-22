@@ -18,7 +18,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 from datetime import datetime
-from environments import CartPoleCL, TaskScheduler
+from typing import Dict
+from environments import CartPoleCL, TaskScheduler, DynamicScenario
 import collections
 
 class MetricsTracker:
@@ -28,6 +29,7 @@ class MetricsTracker:
         self.task_metrics = {}  # 存储每个任务的指标
         self.convergence_data = {}  # 收敛数据
         self.cf_data = {}  # 灾难性遗忘数据
+        self.anytime_performance = {}  # 随时性能曲线 {task_id: [(step, reward), ...]}
         
     def record_task_start(self, task_id, task_name):
         """Record task start"""
@@ -72,6 +74,19 @@ class MetricsTracker:
             if after_perf is not None:
                 self.task_metrics[task_id]['after_performance'] = after_perf
                 self.task_metrics[task_id]['final_performance'] = after_perf
+    
+    def record_anytime_performance(self, global_step: int, task_rewards: Dict[int, float]):
+        """
+        记录随时性能评估结果
+        
+        Args:
+            global_step: 全局训练步数
+            task_rewards: {task_id: average_reward} 字典
+        """
+        for task_id, reward in task_rewards.items():
+            if task_id not in self.anytime_performance:
+                self.anytime_performance[task_id] = []
+            self.anytime_performance[task_id].append((global_step, reward))
                 
     def calculate_cf(self, task_id, new_task_id):
         """计算灾难性遗忘（使用减法，不使用百分比）"""
@@ -135,6 +150,10 @@ class MetricsTracker:
         
         # 生成表格报告
         self._generate_table_report(save_dir)
+        
+        # 生成随时性能曲线
+        if self.anytime_performance:
+            self._generate_anytime_performance_plot(save_dir)
         
     def _generate_text_report(self, save_dir):
         """生成文本报告"""
@@ -702,6 +721,49 @@ class MetricsTracker:
         plt.tight_layout()
         plt.savefig(os.path.join(save_dir, 'summary_metrics.png'), dpi=300, bbox_inches='tight')
         plt.close()
+    
+    def _generate_anytime_performance_plot(self, save_dir):
+        """生成随时性能曲线图"""
+        if not self.anytime_performance:
+            return
+        
+        fig, ax = plt.subplots(figsize=(12, 8))
+        
+        # 为每个任务绘制性能曲线
+        for task_id in sorted(self.anytime_performance.keys()):
+            data = self.anytime_performance[task_id]
+            if not data:
+                continue
+            
+            steps, rewards = zip(*data)
+            task_name = self.task_metrics.get(task_id, {}).get('task_name', f'T{task_id}')
+            ax.plot(steps, rewards, label=f'{task_name}', linewidth=2, alpha=0.7, marker='o', markersize=3)
+        
+        ax.set_xlabel('Global Training Step', fontsize=12)
+        ax.set_ylabel('Average Reward', fontsize=12)
+        ax.set_title('Anytime Performance Curves (Unknown Task Boundaries)', fontsize=14, fontweight='bold')
+        ax.legend(loc='best', fontsize=10)
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(save_dir, 'anytime_performance.png'), dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # 同时保存数据到CSV
+        import pandas as pd
+        all_data = []
+        for task_id, data in self.anytime_performance.items():
+            for step, reward in data:
+                all_data.append({
+                    'task_id': task_id,
+                    'task_name': self.task_metrics.get(task_id, {}).get('task_name', f'T{task_id}'),
+                    'global_step': step,
+                    'average_reward': reward
+                })
+        
+        if all_data:
+            df = pd.DataFrame(all_data)
+            df.to_csv(os.path.join(save_dir, 'anytime_performance.csv'), index=False)
 
 class EntropyGateController:
     """高/低熵门控暂停控制器，支持 high(low) 模式+迟滞"""
@@ -1178,6 +1240,340 @@ def evaluate_task_performance(model_path, task_id, config_path, episodes=10):
         print(f"评估任务 {task_id} 性能时出错: {e}")
         return None
 
+def evaluate_on_all_tasks(model, task_scheduler, config_path, episodes_per_task=5, seed=0):
+    """
+    在所有任务上评估模型性能（随时评估）
+    
+    Args:
+        model: 训练好的DQN模型
+        task_scheduler: 任务调度器
+        config_path: 配置文件路径
+        episodes_per_task: 每个任务的评估回合数
+        seed: 随机种子
+        
+    Returns:
+        Dict[int, float]: {task_id: average_reward} 字典
+    """
+    model.eval()
+    task_rewards = {}
+    
+    # 获取所有任务
+    all_tasks = task_scheduler.get_task_sequence()
+    
+    for task in all_tasks:
+        task_id = task.get('id')
+        if task_id is None:
+            continue
+            
+        # 创建评估环境
+        env_wrapper = CartPoleCL()
+        env_wrapper.set_variant(length=task['length'], wind=task['wind'])
+        env = env_wrapper.make_env(render=False, seed=seed)
+        
+        total_rewards = []
+        
+        for episode in range(episodes_per_task):
+            obs, _ = env.reset(seed=seed + episode)
+            total_reward = 0
+            
+            for step in range(500):  # Maximum 500 steps
+                state = torch.FloatTensor(obs).unsqueeze(0)
+                with torch.no_grad():
+                    action = model(state).max(1)[1].item()
+                
+                obs, reward, terminated, truncated, _ = env.step(action)
+                total_reward += reward
+                
+                if terminated or truncated:
+                    break
+            
+            total_rewards.append(total_reward)
+        
+        env_wrapper.close()
+        task_rewards[task_id] = np.mean(total_rewards)
+    
+    model.train()  # 恢复训练模式
+    return task_rewards
+
+def train_online_stream(total_steps=100000, max_steps_per_episode=500, config_path="config/cartpole_config.yaml",
+                       metrics_tracker=None, entropy_temperature=1.0, egp_mode='high',
+                       egp_window=20, egp_z_hi=1.8, egp_z_lo=1.5, egp_pause_steps=10, egp_z_threshold=-1.5,
+                       pause_policy='egp', fixed_k=10, seed=0, steps_per_task=20000,
+                       drift_type='none', drift_slope=0.0, drift_delta=0.0, drift_amp=0.0, drift_freq=0.0,
+                       eval_freq=1000, eval_episodes=5, epsilon_decay=0.995):
+    """
+    完全在线持续学习训练（未知任务边界）
+    
+    使用单一循环，持久化 replay buffer，环境参数根据全局步数动态变化
+    
+    Args:
+        total_steps: 总训练步数
+        max_steps_per_episode: 每个episode最大步数
+        config_path: 配置文件路径
+        metrics_tracker: 指标跟踪器
+        entropy_temperature: 熵温度参数
+        egp_mode: EGP模式 ('high' or 'low')
+        egp_window: EGP滑动窗口大小
+        egp_z_hi: 高模式触发Z阈值
+        egp_z_lo: 高模式恢复Z阈值
+        egp_pause_steps: EGP暂停步数
+        egp_z_threshold: 低模式Z阈值
+        pause_policy: 暂停策略 ('egp', 'fixed', 'none')
+        fixed_k: 固定间隔策略的步数间隔
+        seed: 随机种子
+        steps_per_task: 每个任务持续的训练步数
+        drift_type: 漂移类型
+        drift_slope: progressive漂移斜率
+        drift_delta: abrupt漂移增量
+        drift_amp: periodic漂移振幅
+        drift_freq: periodic漂移频率
+        eval_freq: 评估频率（每多少步评估一次）
+        eval_episodes: 每次评估的回合数
+        epsilon_decay: Epsilon衰减率（每步衰减）
+        
+    Returns:
+        (model_path, metrics_tracker): 模型路径和指标跟踪器
+    """
+    print("=" * 60)
+    print("开始完全在线持续学习训练（未知任务边界）")
+    print(f"总训练步数: {total_steps}")
+    print(f"每个任务持续步数: {steps_per_task}")
+    print(f"评估频率: 每 {eval_freq} 步")
+    print("=" * 60)
+    
+    # 初始化任务调度器和动态场景
+    task_scheduler = TaskScheduler(config_path)
+    scenario = DynamicScenario(
+        task_scheduler=task_scheduler,
+        steps_per_task=steps_per_task,
+        drift_type=drift_type,
+        drift_slope=drift_slope,
+        drift_delta=drift_delta,
+        drift_amp=drift_amp,
+        drift_freq=drift_freq
+    )
+    
+    # 初始化指标跟踪器
+    if metrics_tracker is None:
+        metrics_tracker = MetricsTracker()
+    
+    # 初始化所有任务的指标
+    for task in task_scheduler.get_task_sequence():
+        task_id = task.get('id')
+        if task_id is not None:
+            metrics_tracker.record_task_start(task_id, task.get('name', f'T{task_id}'))
+    
+    # 创建环境
+    env_wrapper = CartPoleCL()
+    # 初始配置
+    initial_config, _ = scenario.get_config(0)
+    env_wrapper.set_variant(length=initial_config['length'], wind=initial_config['wind'])
+    env = env_wrapper.make_env(render=False, seed=seed)
+    
+    # 创建模型和优化器（只创建一次，持续使用）
+    model = DQNNetwork()
+    target_model = DQNNetwork()
+    target_model.load_state_dict(model.state_dict())
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    criterion = nn.MSELoss()
+    
+    # 经验回放缓冲区（持久化，不重置）
+    from collections import deque
+    replay_buffer = deque(maxlen=10000)
+    batch_size = 32
+    gamma = 0.99
+    
+    # 熵门控暂停控制器
+    entropy_gate = EntropyGateController(
+        window_size=egp_window,
+        pause_steps=egp_pause_steps,
+        mode=egp_mode,
+        z_hi=egp_z_hi,
+        z_lo=egp_z_lo,
+        z_threshold=egp_z_threshold
+    )
+    
+    # Fixed策略的状态变量
+    fixed_global_step = 0
+    fixed_countdown = 0
+    fixed_triggers = 0
+    fixed_paused_steps = 0
+    
+    # 训练循环状态
+    global_step = 0
+    episode_count = 0
+    current_episode_reward = 0
+    current_episode_steps = 0
+    
+    # Epsilon 初始化
+    epsilon = 1.0  # 初始探索率
+    min_epsilon = 0.01
+    
+    # 当前环境状态
+    obs, _ = env.reset(seed=seed)
+    current_config, current_task_id = scenario.get_config(global_step)
+    
+    print(f"\n开始训练...")
+    print(f"初始任务: {current_config['task_name']} (length={current_config['length']}, wind={current_config['wind']:.3f})")
+    print(f"暂停策略: {pause_policy}")
+    if pause_policy == 'fixed':
+        print(f"固定间隔: 每 {fixed_k} 步触发, 暂停 {egp_pause_steps} 步")
+    print("-" * 60)
+    
+    # 主训练循环
+    while global_step < total_steps:
+        # 检查是否需要更新环境配置（任务切换）
+        new_config, new_task_id = scenario.get_config(global_step)
+        if new_task_id != current_task_id or new_config['length'] != current_config['length'] or abs(new_config['wind'] - current_config['wind']) > 1e-6:
+            # 任务切换或参数变化
+            if new_task_id != current_task_id:
+                print(f"\n[任务切换] Step {global_step}: {current_config['task_name']} -> {new_config['task_name']}")
+            env_wrapper.set_variant(length=new_config['length'], wind=new_config['wind'])
+            current_config = new_config
+            current_task_id = new_task_id
+        
+        # 将观察转换为张量
+        state = torch.FloatTensor(obs).unsqueeze(0)
+        
+        # DQN动作选择
+        if np.random.random() < epsilon:
+            action = env.action_space.sample()
+            with torch.no_grad():
+                q_values = model(state).squeeze(0)
+        else:
+            with torch.no_grad():
+                q_values = model(state).squeeze(0)
+            action = q_values.argmax().item()
+        
+        # Softmax 熵计算
+        T = entropy_temperature
+        probs = torch.softmax(q_values / T, dim=-1)
+        H = -(probs * torch.log(probs + 1e-12)).sum().item()
+        
+        # 暂停策略判断
+        if pause_policy == 'egp':
+            pause, Z, trig_id = entropy_gate.step(H)
+        elif pause_policy == 'fixed':
+            fixed_global_step += 1
+            if fixed_countdown > 0:
+                fixed_countdown -= 1
+                fixed_paused_steps += 1
+                pause, Z, trig_id = True, 0.0, fixed_triggers
+            elif fixed_global_step % fixed_k == 0:
+                fixed_countdown = egp_pause_steps
+                fixed_triggers += 1
+                fixed_paused_steps += 1
+                pause, Z, trig_id = True, 0.0, fixed_triggers
+            else:
+                pause, Z, trig_id = False, 0.0, fixed_triggers
+        else:  # 'none'
+            pause, Z, trig_id = False, 0.0, 0
+        
+        # 执行动作
+        next_obs, reward, terminated, truncated, _ = env.step(action)
+        current_episode_reward += reward
+        current_episode_steps += 1
+        global_step += 1
+        done = terminated or truncated
+        
+        # 存储经验（无论是否暂停都存储）
+        replay_buffer.append((obs, action, reward, next_obs, done))
+        
+        # === Epsilon 衰减（每一步都衰减） ===
+        epsilon = max(min_epsilon, epsilon * epsilon_decay)
+        
+        # 如果不是暂停状态，进行网络更新
+        if not pause:
+            # 训练网络
+            if len(replay_buffer) >= batch_size:
+                # 采样批次数据
+                batch = np.random.choice(len(replay_buffer), batch_size, replace=False)
+                states = torch.FloatTensor([replay_buffer[i][0] for i in batch])
+                actions = torch.LongTensor([replay_buffer[i][1] for i in batch])
+                rewards = torch.FloatTensor([replay_buffer[i][2] for i in batch])
+                next_states = torch.FloatTensor([replay_buffer[i][3] for i in batch])
+                dones = torch.BoolTensor([replay_buffer[i][4] for i in batch])
+                
+                # 计算当前Q值
+                current_q_values = model(states).gather(1, actions.unsqueeze(1))
+                
+                # 计算目标Q值
+                with torch.no_grad():
+                    next_q_values = target_model(next_states).max(1)[0]
+                    target_q_values = rewards + (gamma * next_q_values * ~dones)
+                
+                # 计算损失
+                loss = criterion(current_q_values.squeeze(), target_q_values)
+                
+                # 反向传播
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+        
+        # 更新目标网络
+        if global_step % 10 == 0:
+            target_model.load_state_dict(model.state_dict())
+        
+        # Episode结束处理
+        if done or current_episode_steps >= max_steps_per_episode:
+            episode_count += 1
+            
+            # 记录episode指标（使用当前任务ID）
+            if metrics_tracker is not None:
+                metrics_tracker.record_episode(current_task_id, episode_count, current_episode_reward, epsilon)
+            
+            # 打印进度
+            if episode_count % 50 == 0 or episode_count < 5:
+                print(f"Step {global_step:6d} | Episode {episode_count:4d} | "
+                      f"Task {current_task_id} | Reward: {current_episode_reward:6.1f} | "
+                      f"ε: {epsilon:.3f} | H: {H:.3f}")
+            
+            # 重置episode
+            obs, _ = env.reset(seed=seed + episode_count)
+            current_episode_reward = 0
+            current_episode_steps = 0
+        else:
+            obs = next_obs
+        
+        # 定期评估所有任务
+        if global_step % eval_freq == 0 and global_step > 0:
+            print(f"\n[评估] Step {global_step}: 评估所有任务性能...")
+            task_rewards = evaluate_on_all_tasks(model, task_scheduler, config_path, 
+                                                episodes_per_task=eval_episodes, seed=seed)
+            
+            if metrics_tracker is not None:
+                metrics_tracker.record_anytime_performance(global_step, task_rewards)
+            
+            # 打印评估结果
+            for tid, avg_reward in sorted(task_rewards.items()):
+                task_name = task_scheduler.get_task_by_id(tid).get('name', f'T{tid}')
+                print(f"  任务 {tid} ({task_name}): {avg_reward:.2f}")
+            print()
+    
+    env_wrapper.close()
+    
+    # 保存模型
+    save_path = Path("runs") / "online_stream_model.pth"
+    save_path.parent.mkdir(exist_ok=True)
+    torch.save(model.state_dict(), save_path)
+    print(f"\n模型已保存到: {save_path}")
+    
+    # 记录最终统计
+    if metrics_tracker is not None:
+        if pause_policy == 'egp':
+            # 为所有任务记录EGP统计（使用最后一个任务的值作为示例）
+            for task_id in scenario.get_all_task_ids():
+                if task_id in metrics_tracker.task_metrics:
+                    metrics_tracker.task_metrics[task_id]['egp_triggers'] = getattr(entropy_gate, 'trigger_count', 0)
+                    metrics_tracker.task_metrics[task_id]['egp_paused_steps'] = getattr(entropy_gate, 'total_paused_steps', 0)
+        elif pause_policy == 'fixed':
+            for task_id in scenario.get_all_task_ids():
+                if task_id in metrics_tracker.task_metrics:
+                    metrics_tracker.task_metrics[task_id]['egp_triggers'] = fixed_triggers
+                    metrics_tracker.task_metrics[task_id]['egp_paused_steps'] = fixed_paused_steps
+    
+    return save_path, metrics_tracker
+
 def train_continual_learning(task_sequence, episodes_per_task=1000, config_path="config/cartpole_config.yaml",
                              entropy_temperature=1.0, egp_mode='high', egp_window=20, egp_z_hi=1.8, egp_z_lo=1.5,
                              egp_pause_steps=10, egp_z_threshold=-1.5, pause_policy='egp', fixed_k=10, seed=0,
@@ -1296,13 +1692,62 @@ def main():
     parser.add_argument('--drift-amp', type=float, default=0.0, help='periodic 漂移的振幅')
     parser.add_argument('--drift-freq', type=float, default=0.0, help='periodic 漂移的频率')
     parser.add_argument('--seed', type=int, default=0, help='随机种子')
+    parser.add_argument('--online-stream', action='store_true', help='启用完全在线流式训练（未知任务边界）')
+    parser.add_argument('--total-steps', type=int, default=100000, help='在线流式训练的总步数')
+    parser.add_argument('--steps-per-task', type=int, default=20000, help='每个任务持续的训练步数')
+    parser.add_argument('--eval-freq', type=int, default=1000, help='评估频率（每多少步评估一次）')
+    parser.add_argument('--eval-episodes', type=int, default=5, help='每次评估的回合数')
+    parser.add_argument('--epsilon-decay', type=float, default=0.995, help='Epsilon decay rate (per step or episode)')
     args = parser.parse_args()
     
     print("CartPole强化学习演示")
     print("=" * 40)
     
     if args.train:
-        if args.continual:
+        if args.online_stream:
+            print("开始完全在线流式训练模式（未知任务边界）...")
+            # 创建运行目录
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            run_dir = f"runs/online_stream_{timestamp}_seed{args.seed}"
+            os.makedirs(run_dir, exist_ok=True)
+            
+            # 初始化指标跟踪器
+            metrics_tracker = MetricsTracker()
+            
+            # 执行在线流式训练
+            model_path, metrics_tracker = train_online_stream(
+                total_steps=args.total_steps,
+                max_steps_per_episode=500,
+                config_path=args.config,
+                metrics_tracker=metrics_tracker,
+                entropy_temperature=args.entropy_temperature,
+                egp_mode=args.egp_mode,
+                egp_window=args.egp_window,
+                egp_z_hi=args.egp_z_hi,
+                egp_z_lo=args.egp_z_lo,
+                egp_pause_steps=args.egp_pause_steps,
+                egp_z_threshold=args.egp_z_threshold,
+                pause_policy=args.pause_policy,
+                fixed_k=args.fixed_k,
+                seed=args.seed,
+                steps_per_task=args.steps_per_task,
+                drift_type=args.drift_type,
+                drift_slope=args.drift_slope,
+                drift_delta=args.drift_delta,
+                drift_amp=args.drift_amp,
+                drift_freq=args.drift_freq,
+                eval_freq=args.eval_freq,
+                eval_episodes=args.eval_episodes,
+                epsilon_decay=args.epsilon_decay
+            )
+            
+            # 保存指标
+            metrics_tracker.save_metrics(run_dir)
+            print(f"\n在线流式训练完成！")
+            print(f"结果保存在: {run_dir}")
+            print("查看指标报告: metrics_report.txt")
+            print("查看随时性能曲线: anytime_performance.png")
+        elif args.continual:
             print("开始持续学习模式...")
             run_dir, metrics_tracker = train_continual_learning(
                 task_sequence=args.task_sequence,
@@ -1372,6 +1817,7 @@ def main():
         print("使用方法:")
         print("  单任务训练: python run_cartpole.py --train --task-id 1")
         print("  持续学习: python run_cartpole.py --train --continual")
+        print("  在线流式训练: python run_cartpole.py --train --online-stream --total-steps 100000 --steps-per-task 20000")
         print("  演示: python run_cartpole.py --demo --task-id 1")
         print("  自定义持续学习: python run_cartpole.py --train --continual --task-sequence 0 1 2 --episodes-per-task 500")
         print("  任务列表:")
@@ -1384,6 +1830,7 @@ def main():
         print("    - 收敛速度: 记录每个任务达到目标性能的episode数")
         print("    - 平均回报: 记录每个任务的平均奖励")
         print("    - 灾难性遗忘: 计算新任务训练后旧任务性能下降程度")
+        print("    - 随时性能: 在线流式训练模式下，定期评估所有任务的性能曲线")
 
 if __name__ == '__main__':
     main()
