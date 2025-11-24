@@ -1,0 +1,81 @@
+task_id,task_name,global_step,average_reward
+1,T1: short+no wind,500,29.5
+1,T1: short+no wind,1000,88.0
+1,T1: short+no wind,1500,180.0
+1,T1: short+no wind,2000,271.5
+1,T1: short+no wind,2500,271.5
+1,T1: short+no wind,3000,271.5
+1,T1: short+no wind,3500,271.5
+1,T1: short+no wind,4000,271.5
+1,T1: short+no wind,4500,271.5
+1,T1: short+no wind,5000,271.5
+1,T1: short+no wind,5500,271.5
+1,T1: short+no wind,6000,271.5
+1,T1: short+no wind,6500,271.5
+1,T1: short+no wind,7000,271.5
+1,T1: short+no wind,7500,271.5
+1,T1: short+no wind,8000,271.5
+1,T1: short+no wind,8500,271.5
+1,T1: short+no wind,9000,271.5
+1,T1: short+no wind,9500,271.5
+1,T1: short+no wind,10000,271.5
+2,T2: short+wind,500,28.0
+2,T2: short+wind,1000,88.5
+2,T2: short+wind,1500,63.0
+2,T2: short+wind,2000,268.0
+2,T2: short+wind,2500,268.0
+2,T2: short+wind,3000,268.0
+2,T2: short+wind,3500,268.0
+2,T2: short+wind,4000,268.0
+2,T2: short+wind,4500,268.0
+2,T2: short+wind,5000,268.0
+2,T2: short+wind,5500,268.0
+2,T2: short+wind,6000,268.0
+2,T2: short+wind,6500,268.0
+2,T2: short+wind,7000,268.0
+2,T2: short+wind,7500,268.0
+2,T2: short+wind,8000,268.0
+2,T2: short+wind,8500,268.0
+2,T2: short+wind,9000,268.0
+2,T2: short+wind,9500,268.0
+2,T2: short+wind,10000,268.0
+3,T3: long+no wind,500,37.5
+3,T3: long+no wind,1000,141.0
+3,T3: long+no wind,1500,364.0
+3,T3: long+no wind,2000,500.0
+3,T3: long+no wind,2500,366.5
+3,T3: long+no wind,3000,500.0
+3,T3: long+no wind,3500,500.0
+3,T3: long+no wind,4000,500.0
+3,T3: long+no wind,4500,500.0
+3,T3: long+no wind,5000,500.0
+3,T3: long+no wind,5500,500.0
+3,T3: long+no wind,6000,500.0
+3,T3: long+no wind,6500,500.0
+3,T3: long+no wind,7000,500.0
+3,T3: long+no wind,7500,500.0
+3,T3: long+no wind,8000,500.0
+3,T3: long+no wind,8500,500.0
+3,T3: long+no wind,9000,500.0
+3,T3: long+no wind,9500,500.0
+3,T3: long+no wind,10000,500.0
+4,T4: long+wind,500,34.5
+4,T4: long+wind,1000,139.0
+4,T4: long+wind,1500,291.0
+4,T4: long+wind,2000,291.0
+4,T4: long+wind,2500,291.0
+4,T4: long+wind,3000,291.0
+4,T4: long+wind,3500,291.0
+4,T4: long+wind,4000,291.0
+4,T4: long+wind,4500,291.0
+4,T4: long+wind,5000,291.0
+4,T4: long+wind,5500,291.0
+4,T4: long+wind,6000,291.0
+4,T4: long+wind,6500,291.0
+4,T4: long+wind,7000,291.0
+4,T4: long+wind,7500,291.0
+4,T4: long+wind,8000,291.0
+4,T4: long+wind,8500,291.0
+4,T4: long+wind,9000,291.0
+4,T4: long+wind,9500,291.0
+4,T4: long+wind,10000,291.0

@@ -1706,9 +1706,8 @@ def main():
     if args.train:
         if args.online_stream:
             print("开始完全在线流式训练模式（未知任务边界）...")
-            # 创建运行目录
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            run_dir = f"runs/online_stream_{timestamp}_seed{args.seed}"
+            # 创建运行目录 (新结构: runs/{drift_type}/{pause_policy}/seed_{seed}/)
+            run_dir = os.path.join("runs", args.drift_type, args.pause_policy, f"seed_{args.seed}")
             os.makedirs(run_dir, exist_ok=True)
             
             # 初始化指标跟踪器
