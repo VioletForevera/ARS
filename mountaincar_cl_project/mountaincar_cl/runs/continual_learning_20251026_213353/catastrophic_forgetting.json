@@ -1,9 +1,0 @@
-{
-  "0_after_1": {
-    "task_id": 0,
-    "new_task_id": 1,
-    "before_performance": 182.21,
-    "after_performance": -200.0,
-    "cf": -382.21000000000004
-  }
-}

@@ -6,6 +6,8 @@ MountainCar训练和演示
 import gymnasium as gym
 import time
 import argparse
+import collections
+from typing import Dict
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -18,7 +20,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 from datetime import datetime
-from environments import MountainCarCL, TaskScheduler
+from environments import MountainCarCL, TaskScheduler, DynamicScenario
 
 class MetricsTracker:
     """指标跟踪器"""
@@ -27,6 +29,7 @@ class MetricsTracker:
         self.task_metrics = {}  # 存储每个任务的指标
         self.convergence_data = {}  # 收敛数据
         self.cf_data = {}  # 灾难性遗忘数据
+        self.anytime_performance = {}  # 在线流式评估数据
         
     def record_task_start(self, task_id, task_name):
         """记录任务开始"""
@@ -36,7 +39,9 @@ class MetricsTracker:
             'convergence_episode': None,
             'final_performance': None,
             'before_performance': None,
-            'after_performance': None
+            'after_performance': None,
+            'egp_triggers': 0,
+            'egp_paused_steps': 0
         }
         
     def record_episode(self, task_id, episode, reward, epsilon):
@@ -58,6 +63,15 @@ class MetricsTracker:
             if after_perf is not None:
                 self.task_metrics[task_id]['after_performance'] = after_perf
                 self.task_metrics[task_id]['final_performance'] = after_perf
+    
+    def record_anytime_performance(self, global_step: int, task_rewards: Dict[int, float]):
+        """
+        记录随时性能评估结果
+        """
+        for task_id, reward in task_rewards.items():
+            if task_id not in self.anytime_performance:
+                self.anytime_performance[task_id] = []
+            self.anytime_performance[task_id].append((global_step, reward))
                 
     def calculate_cf(self, task_id, new_task_id):
         """计算灾难性遗忘（使用减法，不使用百分比）"""
@@ -122,6 +136,10 @@ class MetricsTracker:
         # 生成表格报告
         self._generate_table_report(save_dir)
         
+        # 生成随时性能曲线
+        if self.anytime_performance:
+            self._generate_anytime_performance_plot(save_dir)
+        
     def _generate_text_report(self, save_dir):
         """生成文本报告"""
         report_file = os.path.join(save_dir, 'metrics_report.txt')
@@ -154,13 +172,21 @@ class MetricsTracker:
             f.write("-" * 30 + "\n")
             all_avg_rewards = []
             for task_id, metrics in self.task_metrics.items():
-                avg_reward = np.mean(metrics['episode_rewards'])
-                all_avg_rewards.append(avg_reward)
-                f.write(f"任务 {task_id} ({metrics['task_name']}): {avg_reward:.2f}\n")
+                rewards = metrics['episode_rewards']
+                if not rewards:
+                    avg_reward = -200.0  # 空数据使用默认值
+                    f.write(f"任务 {task_id} ({metrics['task_name']}): {avg_reward:.2f} (未开始训练)\n")
+                else:
+                    avg_reward = np.mean(rewards)
+                    all_avg_rewards.append(avg_reward)
+                    f.write(f"任务 {task_id} ({metrics['task_name']}): {avg_reward:.2f}\n")
             
-            # 添加跨任务平均
-            overall_avg = np.mean(all_avg_rewards)
-            f.write(f"跨任务平均奖励: {overall_avg:.2f}\n")
+            # 添加跨任务平均（只计算有数据的任务）
+            if all_avg_rewards:
+                overall_avg = np.mean(all_avg_rewards)
+                f.write(f"跨任务平均奖励: {overall_avg:.2f}\n")
+            else:
+                f.write("跨任务平均奖励: N/A (无任务数据)\n")
             f.write("\n")
             
             # 灾难性遗忘报告
@@ -232,7 +258,13 @@ class MetricsTracker:
         
         # 2. 平均回报柱状图
         ax2 = axes[0, 1]
-        avg_rewards = [np.mean(metrics['episode_rewards']) for metrics in self.task_metrics.values()]
+        avg_rewards = []
+        for metrics in self.task_metrics.values():
+            rewards = metrics['episode_rewards']
+            if not rewards:
+                avg_rewards.append(-200.0)  # 空数据使用默认值
+            else:
+                avg_rewards.append(np.mean(rewards))
         bars2 = ax2.bar(task_ids, avg_rewards, color='lightgreen', alpha=0.7)
         ax2.set_xlabel('Task ID')
         ax2.set_ylabel('Average Reward')
@@ -288,6 +320,8 @@ class MetricsTracker:
         ax4 = axes[1, 1]
         for task_id, metrics in self.task_metrics.items():
             rewards = metrics['episode_rewards']
+            if not rewards:
+                continue  # 跳过空数据的任务
             episodes = list(range(1, len(rewards) + 1))
             ax4.plot(episodes, rewards, alpha=0.7, label=f'T{task_id}', linewidth=2)
         
@@ -372,9 +406,15 @@ class MetricsTracker:
         for task_id, metrics in self.task_metrics.items():
             task_ids.append(task_id)
             rewards = metrics['episode_rewards']
-            avg_rewards.append(np.mean(rewards))
-            max_rewards.append(np.max(rewards))
-            min_rewards.append(np.min(rewards))
+            # 处理空列表：如果任务未开始训练，使用默认值
+            if not rewards:
+                avg_rewards.append(-200.0)  # MountainCar 最小奖励值
+                max_rewards.append(-200.0)
+                min_rewards.append(-200.0)
+            else:
+                avg_rewards.append(np.mean(rewards))
+                max_rewards.append(np.max(rewards))
+                min_rewards.append(np.min(rewards))
         
         x = np.arange(len(task_ids))
         width = 0.25
@@ -598,7 +638,13 @@ class MetricsTracker:
         ax1.set_xticklabels([f'T{tid}' for tid in task_ids])
         
         # 2. 平均回报
-        avg_rewards = [np.mean(self.task_metrics[tid]['episode_rewards']) for tid in task_ids]
+        avg_rewards = []
+        for tid in task_ids:
+            rewards = self.task_metrics[tid]['episode_rewards']
+            if not rewards:
+                avg_rewards.append(-200.0)  # 空数据使用默认值
+            else:
+                avg_rewards.append(np.mean(rewards))
         ax2.bar(task_ids, avg_rewards, color='lightgreen', alpha=0.7)
         ax2.set_title('Average Reward')
         ax2.set_xlabel('Task ID')
@@ -609,6 +655,8 @@ class MetricsTracker:
         # 3. 训练曲线
         for task_id in task_ids:
             rewards = self.task_metrics[task_id]['episode_rewards']
+            if not rewards:
+                continue  # 跳过空数据的任务
             episodes = list(range(1, len(rewards) + 1))
             ax3.plot(episodes, rewards, alpha=0.7, label=f'T{task_id}', linewidth=2)
         ax3.set_title('Training Curves')
@@ -669,6 +717,106 @@ class MetricsTracker:
         plt.savefig(os.path.join(save_dir, 'summary_metrics.png'), dpi=300, bbox_inches='tight')
         plt.close()
 
+    def _generate_anytime_performance_plot(self, save_dir: str) -> None:
+        """生成随时性能曲线并导出CSV"""
+        if not self.anytime_performance:
+            return
+        
+        fig, ax = plt.subplots(figsize=(12, 8))
+        
+        for task_id in sorted(self.anytime_performance.keys()):
+            data = self.anytime_performance[task_id]
+            if not data:
+                continue
+            steps, rewards = zip(*data)
+            # Use English label instead of Chinese task name
+            ax.plot(steps, rewards, label=f'T{task_id}', linewidth=2, alpha=0.8, marker='o', markersize=3)
+        
+        ax.set_xlabel('Global Training Step', fontsize=12)
+        ax.set_ylabel('Average Reward', fontsize=12)
+        ax.set_title('Anytime Performance Curves (Unknown Task Boundaries)', fontsize=14, fontweight='bold')
+        ax.set_ylim(-220, 20)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc='best', fontsize=10)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(save_dir, 'anytime_performance.png'), dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        rows = []
+        for task_id, data in self.anytime_performance.items():
+            task_name = self.task_metrics.get(task_id, {}).get('task_name', f'T{task_id}')
+            for step, reward in data:
+                rows.append({
+                    'task_id': task_id,
+                    'task_name': task_name,
+                    'global_step': step,
+                    'average_reward': reward
+                })
+        if rows:
+            df = pd.DataFrame(rows)
+            df.to_csv(os.path.join(save_dir, 'anytime_performance.csv'), index=False)
+
+
+class EntropyGateController:
+    """高/低熵门控暂停控制器（支持迟滞 & 统计）"""
+    def __init__(self, window_size=20, pause_steps=10, mode='high', z_hi=1.8, z_lo=1.5, z_threshold=-1.5):
+        self.window_size = window_size
+        self.pause_steps = pause_steps
+        self.mode = mode
+        self.z_hi = z_hi
+        self.z_lo = z_lo
+        self.z_threshold = z_threshold
+        self.entropy_window = collections.deque(maxlen=window_size)
+        self.pause_count = 0
+        self.trigger_count = 0
+        self.total_paused_steps = 0
+    
+    def step(self, H: float):
+        """根据当前熵值返回是否暂停"""
+        self.entropy_window.append(H)
+        if len(self.entropy_window) < self.window_size:
+            return False, 0.0, self.trigger_count
+        
+        mean = np.mean(self.entropy_window)
+        std = np.std(self.entropy_window) + 1e-8
+        Z = (H - mean) / std
+        
+        if self.mode == 'high':
+            if self.pause_count > 0:
+                self.pause_count -= 1
+                self.total_paused_steps += 1
+                if Z < self.z_lo or self.pause_count == 0:
+                    if self.pause_count == 0:
+                        print(f"[EGP][RESUME] after {self.pause_steps} steps")
+                    return False, Z, self.trigger_count
+                return True, Z, self.trigger_count
+            
+            if Z > self.z_hi:
+                self.pause_count = self.pause_steps
+                self.trigger_count += 1
+                self.total_paused_steps += 1
+                print(f"[EGP][TRIGGER#{self.trigger_count}] H={H:.3f} Z={Z:.2f} mode={self.mode}")
+                return True, Z, self.trigger_count
+            return False, Z, self.trigger_count
+        
+        # Low mode（向后兼容）
+        if self.pause_count > 0:
+            self.pause_count -= 1
+            self.total_paused_steps += 1
+            if self.pause_count == 0:
+                print(f"[EGP][RESUME] after {self.pause_steps} steps")
+            return True, Z, self.trigger_count
+        
+        if Z < self.z_threshold:
+            self.pause_count = self.pause_steps
+            self.trigger_count += 1
+            self.total_paused_steps += 1
+            print(f"[EGP][TRIGGER#{self.trigger_count}] H={H:.3f} Z={Z:.2f} mode={self.mode}")
+            return True, Z, self.trigger_count
+        return False, Z, self.trigger_count
+
+
 class DQNNetwork(nn.Module):
     def __init__(self, input_size=2, hidden_size=256, output_size=3):
         super().__init__()
@@ -686,6 +834,270 @@ class DQNNetwork(nn.Module):
     
     def forward(self, x):
         return self.network(x)
+
+
+def evaluate_on_all_tasks(model: nn.Module, task_scheduler: TaskScheduler,
+                          episodes_per_task: int = 5, seed: int = 0) -> Dict[int, float]:
+    """
+    在所有任务上评估当前模型（用于在线流式训练的随时性能）
+    """
+    results: Dict[int, float] = {}
+    
+    for task in task_scheduler.get_task_sequence():
+        task_id = task.get('id')
+        if task_id is None:
+            continue
+        
+        env_wrapper = MountainCarCL()
+        env = env_wrapper.make_env(render=False)
+        env_wrapper.set_variant(
+            gravity=task.get('gravity', 0.0025),
+            force_mag=task.get('force_mag', 0.001)
+        )
+        
+        episode_rewards = []
+        for ep in range(episodes_per_task):
+            obs, _ = env.reset(seed=seed + ep)
+            total_reward = 0.0
+            for _ in range(200):
+                state = torch.FloatTensor(obs).unsqueeze(0)
+                with torch.no_grad():
+                    action = model(state).max(1)[1].item()
+                obs, reward, terminated, truncated, _ = env.step(action)
+                total_reward += reward
+                if terminated or truncated:
+                    break
+            episode_rewards.append(total_reward)
+        
+        env_wrapper.close()
+        if episode_rewards:
+            results[task_id] = float(np.mean(episode_rewards))
+    
+    return results
+
+
+def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_path="config/mountaincar_config.yaml",
+                       metrics_tracker=None, entropy_temperature=1.0, egp_mode='high',
+                       egp_window=20, egp_z_hi=1.8, egp_z_lo=1.5, egp_pause_steps=10, egp_z_threshold=-1.5,
+                       pause_policy='egp', fixed_k=10, seed=0, steps_per_task=25000,
+                       drift_type='none', drift_slope=0.0, drift_delta=0.0, drift_amp=0.0, drift_freq=0.0,
+                       eval_freq=1000, eval_episodes=5, epsilon_decay=0.999, output_dir="runs"):
+    """
+    MountainCar 完全在线流式训练（未知任务边界）实现
+    """
+    print("=" * 60)
+    print("开始 MountainCar 在线流式训练（未知任务边界）")
+    print(f"总训练步数: {total_steps}")
+    print(f"每个任务持续步数: {steps_per_task}")
+    print(f"漂移类型: {drift_type}")
+    print("=" * 60)
+    
+    task_scheduler = TaskScheduler(config_path)
+    scenario = DynamicScenario(
+        task_scheduler=task_scheduler,
+        steps_per_task=steps_per_task,
+        drift_type=drift_type,
+        drift_slope=drift_slope,
+        drift_delta=drift_delta,
+        drift_amp=drift_amp,
+        drift_freq=drift_freq
+    )
+    
+    if metrics_tracker is None:
+        metrics_tracker = MetricsTracker()
+    for task in task_scheduler.get_task_sequence():
+        task_id = task.get('id')
+        if task_id is not None:
+            metrics_tracker.record_task_start(task_id, task.get('name', f'T{task_id}'))
+    
+    env_wrapper = MountainCarCL()
+    env = env_wrapper.make_env(render=False)
+    initial_config, initial_task_id = scenario.get_config(0)
+    env_wrapper.set_variant(gravity=initial_config['gravity'], force_mag=initial_config['force_mag'])
+    obs, _ = env.reset(seed=seed)
+    
+    model = DQNNetwork()
+    target_model = DQNNetwork()
+    target_model.load_state_dict(model.state_dict())
+    optimizer = optim.Adam(model.parameters(), lr=0.0005)
+    criterion = nn.MSELoss()
+    
+    replay_buffer = collections.deque(maxlen=50000)
+    batch_size = 64
+    gamma = 0.99
+    
+    entropy_gate = EntropyGateController(
+        window_size=egp_window,
+        pause_steps=egp_pause_steps,
+        mode=egp_mode,
+        z_hi=egp_z_hi,
+        z_lo=egp_z_lo,
+        z_threshold=egp_z_threshold
+    )
+    
+    fixed_global_step = 0
+    fixed_countdown = 0
+    fixed_triggers = 0
+    fixed_paused_steps = 0
+    
+    global_step = 0
+    episode_count = 0
+    current_episode_reward = 0.0
+    current_episode_steps = 0
+    current_config = initial_config
+    current_task_id = initial_task_id
+    
+    epsilon = 1.0
+    min_epsilon = 0.01
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    print(f"初始任务: {current_config['task_name']} (gravity={current_config['gravity']:.4f}, force={current_config['force_mag']:.6f})")
+    print(f"暂停策略: {pause_policy}")
+    if pause_policy == 'fixed':
+        print(f"固定策略: 每 {fixed_k} 步触发，暂停 {egp_pause_steps} 步")
+    print("-" * 60)
+    
+    while global_step < total_steps:
+        new_config, new_task_id = scenario.get_config(global_step)
+        if (new_task_id != current_task_id or 
+            abs(new_config['gravity'] - current_config['gravity']) > 1e-9 or
+            abs(new_config['force_mag'] - current_config['force_mag']) > 1e-9):
+            if new_task_id != current_task_id:
+                print(f"\n[任务切换] Step {global_step}: {current_config['task_name']} -> {new_config['task_name']}")
+            env_wrapper.set_variant(gravity=new_config['gravity'], force_mag=new_config['force_mag'])
+            current_config = new_config
+            current_task_id = new_task_id
+        
+        state = torch.FloatTensor(obs).unsqueeze(0)
+        if np.random.random() < epsilon:
+            action = env.action_space.sample()
+            with torch.no_grad():
+                q_values = model(state).squeeze(0)
+        else:
+            with torch.no_grad():
+                q_values = model(state).squeeze(0)
+            action = q_values.argmax().item()
+        
+        probs = torch.softmax(q_values / entropy_temperature, dim=-1)
+        H = -(probs * torch.log(probs + 1e-12)).sum().item()
+        
+        if pause_policy == 'egp':
+            pause, Z, trig_id = entropy_gate.step(H)
+        elif pause_policy == 'fixed':
+            fixed_global_step += 1
+            if fixed_countdown > 0:
+                fixed_countdown -= 1
+                fixed_paused_steps += 1
+                pause, Z, trig_id = True, 0.0, fixed_triggers
+            elif fixed_global_step % fixed_k == 0:
+                fixed_countdown = egp_pause_steps
+                fixed_triggers += 1
+                fixed_paused_steps += 1
+                pause, Z, trig_id = True, 0.0, fixed_triggers
+            else:
+                pause, Z, trig_id = False, 0.0, fixed_triggers
+        else:
+            pause, Z, trig_id = False, 0.0, 0
+        
+        next_obs, reward, terminated, truncated, _ = env.step(action)
+        position, velocity = next_obs
+        prev_position, prev_velocity = obs
+        
+        improved_reward = reward
+        if position > prev_position:
+            improved_reward += 1.0
+        elif position < prev_position:
+            improved_reward -= 0.5
+        if abs(velocity) > abs(prev_velocity):
+            improved_reward += 0.5
+        if position > -0.3:
+            improved_reward += 3.0
+        elif position > -0.5:
+            improved_reward += 2.0
+        elif position > -0.8:
+            improved_reward += 1.0
+        elif position > -1.0:
+            improved_reward += 0.5
+        elif position > -1.1:
+            improved_reward += 0.2
+        if terminated:
+            improved_reward += 100.0
+        
+        current_episode_reward += improved_reward
+        current_episode_steps += 1
+        global_step += 1
+        done = terminated or truncated
+        
+        replay_buffer.append((obs, action, improved_reward, next_obs, done))
+        epsilon = max(min_epsilon, epsilon * epsilon_decay)
+        
+        if not pause and len(replay_buffer) >= batch_size:
+            batch_indices = np.random.choice(len(replay_buffer), batch_size, replace=False)
+            states = torch.FloatTensor(np.vstack([replay_buffer[i][0] for i in batch_indices]))
+            actions = torch.LongTensor(np.array([replay_buffer[i][1] for i in batch_indices]))
+            rewards_batch = torch.FloatTensor(np.array([replay_buffer[i][2] for i in batch_indices]))
+            next_states = torch.FloatTensor(np.vstack([replay_buffer[i][3] for i in batch_indices]))
+            dones = torch.BoolTensor(np.array([replay_buffer[i][4] for i in batch_indices]))
+            
+            current_q = model(states).gather(1, actions.unsqueeze(1)).squeeze()
+            with torch.no_grad():
+                next_q = target_model(next_states).max(1)[0]
+                target_q = rewards_batch + (gamma * next_q * (~dones))
+            loss = criterion(current_q, target_q)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        
+        if global_step % 50 == 0:
+            target_model.load_state_dict(model.state_dict())
+        
+        if done or current_episode_steps >= max_steps_per_episode:
+            episode_count += 1
+            if metrics_tracker is not None:
+                metrics_tracker.record_episode(current_task_id, episode_count, current_episode_reward, epsilon)
+            if episode_count % 50 == 0 or episode_count < 5:
+                print(f"Step {global_step:6d} | Ep {episode_count:4d} | Task {current_task_id} | "
+                      f"Reward {current_episode_reward:7.2f} | ε={epsilon:.3f} | H={H:.3f}")
+            obs, _ = env.reset(seed=seed + episode_count)
+            current_episode_reward = 0.0
+            current_episode_steps = 0
+        else:
+            obs = next_obs
+        
+        if eval_freq > 0 and global_step > 0 and global_step % eval_freq == 0:
+            print(f"\n[评估] Step {global_step}: 评估所有任务性能...")
+            task_rewards = evaluate_on_all_tasks(model, task_scheduler,
+                                                 episodes_per_task=eval_episodes, seed=seed)
+            if metrics_tracker is not None:
+                metrics_tracker.record_anytime_performance(global_step, task_rewards)
+            for tid, avg_reward in sorted(task_rewards.items()):
+                task_name = task_scheduler.get_task_by_id(tid).get('name', f'T{tid}')
+                print(f"  任务 {tid} ({task_name}): {avg_reward:.2f}")
+            print("-" * 40)
+    
+    env_wrapper.close()
+    
+    model_path = Path(output_dir) / "online_stream_model.pth"
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(model.state_dict(), model_path)
+    print(f"\n模型已保存到: {model_path}")
+    
+    if metrics_tracker is not None:
+        for task_id in scenario.get_all_task_ids():
+            if task_id not in metrics_tracker.task_metrics:
+                continue
+            if pause_policy == 'egp':
+                metrics_tracker.task_metrics[task_id]['egp_triggers'] = entropy_gate.trigger_count
+                metrics_tracker.task_metrics[task_id]['egp_paused_steps'] = entropy_gate.total_paused_steps
+            elif pause_policy == 'fixed':
+                metrics_tracker.task_metrics[task_id]['egp_triggers'] = fixed_triggers
+                metrics_tracker.task_metrics[task_id]['egp_paused_steps'] = fixed_paused_steps
+            else:
+                metrics_tracker.task_metrics[task_id]['egp_triggers'] = 0
+                metrics_tracker.task_metrics[task_id]['egp_paused_steps'] = 0
+    
+    return model_path, metrics_tracker
 
 def train(episodes=1000, max_steps=200, task_id=0, config_path="config/mountaincar_config.yaml", 
           metrics_tracker=None, before_performance=None):
@@ -1127,13 +1539,71 @@ def main():
     parser.add_argument('--continual', action='store_true', help='持续学习模式')
     parser.add_argument('--task-sequence', type=int, nargs='+', default=[0, 1, 2, 3, 4], help='任务序列')
     parser.add_argument('--episodes-per-task', type=int, default=300, help='每个任务的训练回合数')
+    parser.add_argument('--online-stream', action='store_true', help='完全在线流式训练模式')
+    parser.add_argument('--total-steps', type=int, default=100000, help='在线训练总步数')
+    parser.add_argument('--steps-per-task', type=int, default=25000, help='每个任务持续的步数')
+    parser.add_argument('--eval-freq', type=int, default=1000, help='在线训练评估频率')
+    parser.add_argument('--eval-episodes', type=int, default=5, help='在线评估回合数')
+    parser.add_argument('--entropy-temperature', type=float, default=1.0, help='Softmax熵温度')
+    parser.add_argument('--egp-mode', type=str, default='high', choices=['high', 'low'], help='EGP 模式')
+    parser.add_argument('--egp-window', type=int, default=50, help='EGP 滑动窗口大小')
+    parser.add_argument('--egp-z-hi', type=float, default=3.5, help='EGP 高熵触发阈值')
+    parser.add_argument('--egp-z-lo', type=float, default=3.0, help='EGP 迟滞恢复阈值')
+    parser.add_argument('--egp-pause-steps', type=int, default=10, help='EGP 暂停步数')
+    parser.add_argument('--egp-z-threshold', type=float, default=-1.5, help='低熵模式阈值')
+    parser.add_argument('--pause-policy', type=str, default='egp', choices=['egp', 'fixed', 'none'], help='暂停策略')
+    parser.add_argument('--fixed-k', type=int, default=100, help='固定策略触发间隔')
+    parser.add_argument('--seed', type=int, default=0, help='随机种子')
+    parser.add_argument('--drift-type', type=str, default='none', choices=['none', 'progressive', 'abrupt', 'periodic'], help='漂移类型')
+    parser.add_argument('--drift-slope', type=float, default=0.0, help='progressive 漂移斜率')
+    parser.add_argument('--drift-delta', type=float, default=0.0, help='abrupt 漂移增量')
+    parser.add_argument('--drift-amp', type=float, default=0.0, help='periodic 漂移振幅')
+    parser.add_argument('--drift-freq', type=float, default=0.0, help='periodic 漂移频率')
+    parser.add_argument('--epsilon-decay', type=float, default=0.99995, help='在线流式训练 epsilon 衰减')
     args = parser.parse_args()
     
     print("MountainCar强化学习演示")
     print("=" * 40)
     
     if args.train:
-        if args.continual:
+        if args.online_stream:
+            print("开始完全在线流式训练模式（MountainCar）...")
+            run_dir = os.path.join("runs", args.drift_type, args.pause_policy, f"seed_{args.seed}")
+            os.makedirs(run_dir, exist_ok=True)
+            
+            metrics_tracker = MetricsTracker()
+            model_path, metrics_tracker = train_online_stream(
+                total_steps=args.total_steps,
+                max_steps_per_episode=200,
+                config_path=args.config,
+                metrics_tracker=metrics_tracker,
+                entropy_temperature=args.entropy_temperature,
+                egp_mode=args.egp_mode,
+                egp_window=args.egp_window,
+                egp_z_hi=args.egp_z_hi,
+                egp_z_lo=args.egp_z_lo,
+                egp_pause_steps=args.egp_pause_steps,
+                egp_z_threshold=args.egp_z_threshold,
+                pause_policy=args.pause_policy,
+                fixed_k=args.fixed_k,
+                seed=args.seed,
+                steps_per_task=args.steps_per_task,
+                drift_type=args.drift_type,
+                drift_slope=args.drift_slope,
+                drift_delta=args.drift_delta,
+                drift_amp=args.drift_amp,
+                drift_freq=args.drift_freq,
+                eval_freq=args.eval_freq,
+                eval_episodes=args.eval_episodes,
+                epsilon_decay=args.epsilon_decay,
+                output_dir=run_dir
+            )
+            
+            metrics_tracker.save_metrics(run_dir)
+            print("\n在线流式训练完成！")
+            print(f"结果保存在: {run_dir}")
+            print("查看指标: metrics_report.txt / anytime_performance.png")
+        elif args.continual:
             print("开始持续学习模式...")
             run_dir, metrics_tracker = train_continual_learning(
                 task_sequence=args.task_sequence,
