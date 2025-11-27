@@ -22,6 +22,15 @@ from pathlib import Path
 from datetime import datetime
 from mountaincar_cl.environments import MountainCarCL, TaskScheduler, DynamicScenario
 
+def _json_fix(obj):
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, (np.ndarray,)):
+        return obj.tolist()
+    return str(obj)
+
 class MetricsTracker:
     """指标跟踪器"""
     
@@ -115,12 +124,12 @@ class MetricsTracker:
         # 保存详细指标
         metrics_file = os.path.join(save_dir, 'metrics.json')
         with open(metrics_file, 'w', encoding='utf-8') as f:
-            json.dump(self.task_metrics, f, indent=2, ensure_ascii=False)
+            json.dump(self.task_metrics, f, indent=2, ensure_ascii=False, default=_json_fix)
             
         # 保存CF数据
         cf_file = os.path.join(save_dir, 'catastrophic_forgetting.json')
         with open(cf_file, 'w', encoding='utf-8') as f:
-            json.dump(self.cf_data, f, indent=2, ensure_ascii=False)
+            json.dump(self.cf_data, f, indent=2, ensure_ascii=False, default=_json_fix)
             
         # 生成报告
         self.generate_report(save_dir)
