@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 from datetime import datetime
-from environments import MountainCarCL, TaskScheduler, DynamicScenario
+from mountaincar_cl.environments import MountainCarCL, TaskScheduler, DynamicScenario
 
 class MetricsTracker:
     """指标跟踪器"""
@@ -876,12 +876,12 @@ def evaluate_on_all_tasks(model: nn.Module, task_scheduler: TaskScheduler,
     return results
 
 
-def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_path="config/mountaincar_config.yaml",
+def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_path="mountaincar_cl/config/mountaincar_config.yaml",
                        metrics_tracker=None, entropy_temperature=1.0, egp_mode='high',
                        egp_window=20, egp_z_hi=1.8, egp_z_lo=1.5, egp_pause_steps=10, egp_z_threshold=-1.5,
                        pause_policy='egp', fixed_k=10, seed=0, steps_per_task=25000,
                        drift_type='none', drift_slope=0.0, drift_delta=0.0, drift_amp=0.0, drift_freq=0.0,
-                       eval_freq=1000, eval_episodes=5, epsilon_decay=0.999, output_dir="runs"):
+                       eval_freq=1000, eval_episodes=5, epsilon_decay=0.99995, output_dir="runs"):
     """
     MountainCar 完全在线流式训练（未知任务边界）实现
     """
@@ -1002,26 +1002,18 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_pa
         
         next_obs, reward, terminated, truncated, _ = env.step(action)
         position, velocity = next_obs
-        prev_position, prev_velocity = obs
         
         improved_reward = reward
-        if position > prev_position:
-            improved_reward += 1.0
-        elif position < prev_position:
-            improved_reward -= 0.5
-        if abs(velocity) > abs(prev_velocity):
-            improved_reward += 0.5
+        improved_reward += abs(velocity) * 0.1
         if position > -0.3:
-            improved_reward += 3.0
+            improved_reward += 0.1
         elif position > -0.5:
-            improved_reward += 2.0
-        elif position > -0.8:
-            improved_reward += 1.0
-        elif position > -1.0:
-            improved_reward += 0.5
-        elif position > -1.1:
-            improved_reward += 0.2
-        if terminated:
+            improved_reward += 0.05
+        elif position > -0.7:
+            improved_reward += 0.02
+        elif position > -0.9:
+            improved_reward += 0.01
+        if terminated and current_episode_steps < max_steps_per_episode:
             improved_reward += 100.0
         
         current_episode_reward += improved_reward
@@ -1099,7 +1091,7 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_pa
     
     return model_path, metrics_tracker
 
-def train(episodes=1000, max_steps=200, task_id=0, config_path="config/mountaincar_config.yaml", 
+def train(episodes=1000, max_steps=200, task_id=0, config_path="mountaincar_cl/config/mountaincar_config.yaml", 
           metrics_tracker=None, before_performance=None):
     """训练模型 - 真正的DQN实现"""
     # 加载配置和任务信息
@@ -1172,34 +1164,20 @@ def train(episodes=1000, max_steps=200, task_id=0, config_path="config/mountainc
             
             # MountainCar改进奖励：鼓励摆动和接近目标
             position, velocity = next_obs
-            prev_position, prev_velocity = obs
             
             improved_reward = reward  # 基础奖励 -1
-            
-            # 位置奖励 - 鼓励向右移动（接近目标）
-            if position > prev_position:
-                improved_reward += 1.0  # 增加位置奖励
-            elif position < prev_position:
-                improved_reward -= 0.5  # 轻微惩罚后退
-            
-            # 速度奖励 - 鼓励获得动能（摆动策略）
-            if abs(velocity) > abs(prev_velocity):
-                improved_reward += 0.5  # 增加速度奖励
-            
-            # 高度奖励 - 鼓励爬升 (更细致的奖励设计)
+            improved_reward += abs(velocity) * 0.1
             if position > -0.3:  # 非常接近山顶
-                improved_reward += 3.0
+                improved_reward += 0.1
             elif position > -0.5:  # 接近山顶
-                improved_reward += 2.0
-            elif position > -0.8:  # 中等高度
-                improved_reward += 1.0
-            elif position > -1.0:  # 离开谷底
-                improved_reward += 0.5
-            elif position > -1.1:  # 轻微离开谷底
-                improved_reward += 0.2
+                improved_reward += 0.05
+            elif position > -0.7:
+                improved_reward += 0.02
+            elif position > -0.9:
+                improved_reward += 0.01
                 
             # 到达目标的大奖励
-            if terminated:
+            if terminated and steps < max_steps:
                 improved_reward += 100
             
             total_reward += improved_reward
@@ -1302,7 +1280,7 @@ def train(episodes=1000, max_steps=200, task_id=0, config_path="config/mountainc
     
     return save_path, final_avg
 
-def demonstrate(model_path, episodes=3, max_steps=200, delay=0.05, task_id=0, config_path="config/mountaincar_config.yaml"):
+def demonstrate(model_path, episodes=3, max_steps=200, delay=0.05, task_id=0, config_path="mountaincar_cl/config/mountaincar_config.yaml"):
     """演示训练好的模型"""
     print("\n开始演示训练好的智能体...")
     print(f"加载模型: {model_path}")
@@ -1455,7 +1433,7 @@ def evaluate_task_performance(model_path, task_id, config_path, episodes=10):
         print(f"评估任务 {task_id} 性能时出错: {e}")
         return None
 
-def train_continual_learning(task_sequence, episodes_per_task=1000, config_path="config/mountaincar_config.yaml"):
+def train_continual_learning(task_sequence, episodes_per_task=1000, config_path="mountaincar_cl/config/mountaincar_config.yaml"):
     """持续学习训练 - 支持多任务和指标跟踪"""
     print("开始持续学习训练...")
     print(f"任务序列: {task_sequence}")
@@ -1535,7 +1513,7 @@ def main():
     parser.add_argument('--episodes', type=int, default=1, help='演示回合数')
     parser.add_argument('--train-episodes', type=int, default=300, help='训练回合数')
     parser.add_argument('--task-id', type=int, default=0, help='任务ID (0-4)')
-    parser.add_argument('--config', type=str, default='config/mountaincar_config.yaml', help='配置文件路径')
+    parser.add_argument('--config', type=str, default='mountaincar_cl/config/mountaincar_config.yaml', help='配置文件路径')
     parser.add_argument('--continual', action='store_true', help='持续学习模式')
     parser.add_argument('--task-sequence', type=int, nargs='+', default=[0, 1, 2, 3, 4], help='任务序列')
     parser.add_argument('--episodes-per-task', type=int, default=300, help='每个任务的训练回合数')

@@ -98,7 +98,7 @@ def plot_benchmark(drift_type: str, save_path: Path) -> None:
     ax.set_ylabel('Average Reward', fontsize=14, fontweight='bold')
     ax.set_title(f'MountainCar Anytime Performance ({drift_type.capitalize()})', fontsize=16, fontweight='bold')
     ax.set_xlim(0, 100000)
-    ax.set_ylim(-220, 20)
+    ax.set_ylim(-200, 0)  # Mountain Car rewards are negative, adjusted for better visibility
     ax.grid(True, alpha=0.3)
     ax.legend(loc='best', fontsize=12)
     
@@ -150,7 +150,7 @@ def plot_per_task(drift_type: str, save_dir: Path) -> None:
         task_name = df[df['task_id'] == task_id]['task_name'].iloc[0]
         ax.set_ylabel(f'Task {task_id}\n({task_name})', fontsize=11, fontweight='bold')
         ax.set_xlim(0, 100000)
-        ax.set_ylim(-220, 20)
+        ax.set_ylim(-200, 0)  # Mountain Car rewards are negative, adjusted for better visibility
         ax.grid(True, alpha=0.3)
         ax.legend(loc='best', fontsize=10)
         if idx == len(task_ids) - 1:

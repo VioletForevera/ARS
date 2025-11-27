@@ -17,10 +17,11 @@ DRIFT_TYPES = ['progressive', 'abrupt', 'periodic']
 POLICIES = ['egp', 'fixed', 'none']
 
 # 漂移参数（MountainCar 物理量较小，精调后更易观察差异）
+# Base force is 0.001, Gravity is 0.0025. Drifts must be subtle.
 DRIFT_PARAMS = {
     'progressive': {
         'drift_type': 'progressive',
-        'drift_slope': 0.00001,
+        'drift_slope': 1e-8,  # Very slow decay/growth
         'drift_delta': 0.0,
         'drift_amp': 0.0,
         'drift_freq': 0.0,
@@ -28,7 +29,7 @@ DRIFT_PARAMS = {
     'abrupt': {
         'drift_type': 'abrupt',
         'drift_slope': 0.0,
-        'drift_delta': 0.0005,
+        'drift_delta': 0.0005,  # A 50% shock to engine power, significant but recoverable
         'drift_amp': 0.0,
         'drift_freq': 0.0,
     },
@@ -57,7 +58,8 @@ COMMON_PARAMS = {
 }
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-RUN_DIR = PROJECT_ROOT / "mountaincar_cl"
+# Run from root directory so run_mountaincar.py wrapper can find mountaincar_cl package
+RUN_DIR = PROJECT_ROOT
 
 
 def build_command(drift_type: str, policy: str, seed: int) -> list[str]:
