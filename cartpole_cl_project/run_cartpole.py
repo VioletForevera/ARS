@@ -1838,8 +1838,13 @@ def main():
             # 获取当前脚本的绝对目录
             base_dir = os.path.dirname(os.path.abspath(__file__))
             
-            # 创建运行目录 (使用绝对路径)
-            run_dir = os.path.join(base_dir, "runs", args.drift_type, args.pause_policy, f"seed_{args.seed}")
+            # 根据是否启用EWC选择不同的保存目录
+            if args.enable_ewc:
+                # 带EWC的实验数据保存在 runs 目录下
+                run_dir = os.path.join(base_dir, "runs", args.drift_type, args.pause_policy, f"seed_{args.seed}")
+            else:
+                # 不带EWC的实验数据保存在 runs_cartpole_No_EWC 目录下
+                run_dir = os.path.join(base_dir, "runs_cartpole_No_EWC", args.drift_type, args.pause_policy, f"seed_{args.seed}")
             os.makedirs(run_dir, exist_ok=True)
             
             # 初始化指标跟踪器
