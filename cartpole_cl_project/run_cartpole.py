@@ -188,7 +188,8 @@ class MetricsTracker:
             f.write("-" * 30 + "\n")
             all_avg_rewards = []
             for task_id, metrics in self.task_metrics.items():
-                avg_reward = np.mean(metrics['episode_rewards'])
+                rewards = metrics['episode_rewards']
+                avg_reward = np.mean(rewards) if rewards else 0.0
                 all_avg_rewards.append(avg_reward)
                 f.write(f"任务 {task_id} ({metrics['task_name']}): {avg_reward:.2f}\n")
             
@@ -288,7 +289,7 @@ class MetricsTracker:
         
         # 2. 平均回报柱状图
         ax2 = axes[0, 1]
-        avg_rewards = [np.mean(metrics['episode_rewards']) for metrics in self.task_metrics.values()]
+        avg_rewards = [np.mean(metrics['episode_rewards']) if metrics['episode_rewards'] else 0.0 for metrics in self.task_metrics.values()]
         bars2 = ax2.bar(task_ids, avg_rewards, color='lightgreen', alpha=0.7)
         ax2.set_xlabel('Task ID')
         ax2.set_ylabel('Average Reward')
@@ -399,7 +400,7 @@ class MetricsTracker:
         ax.set_ylabel('Convergence Episodes')
         ax.set_title('Convergence Speed by Task')
         ax.set_xticks(task_ids)
-        ax1.set_xticklabels([f'T{tid}' for tid in task_ids])
+        ax.set_xticklabels([f'T{tid}' for tid in task_ids])
         
         # 添加数值标签
         for bar, speed in zip(bars, conv_speeds):
@@ -652,7 +653,7 @@ class MetricsTracker:
         ax1.set_xticklabels([f'T{tid}' for tid in task_ids])
         
         # 2. 平均回报
-        avg_rewards = [np.mean(self.task_metrics[tid]['episode_rewards']) for tid in task_ids]
+        avg_rewards = [np.mean(self.task_metrics[tid]['episode_rewards']) if self.task_metrics[tid]['episode_rewards'] else 0.0 for tid in task_ids]
         ax2.bar(task_ids, avg_rewards, color='lightgreen', alpha=0.7)
         ax2.set_title('Average Reward')
         ax2.set_xlabel('Task ID')
