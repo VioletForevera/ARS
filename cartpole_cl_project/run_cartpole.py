@@ -1420,12 +1420,45 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=500, config_pa
         print(f"固定间隔: 每 {fixed_k} 步触发, 暂停 {egp_pause_steps} 步")
     print("-" * 60)
     
+    # == 上帝视角评估变量初始化 ==
+    task_baselines = {}
+    seen_tasks = set()
+    seen_tasks.add(current_task_id)
+    
     # 主训练循环
     while global_step < total_steps:
         # 检查是否需要更新环境配置（任务切换）
         new_config, new_task_id = scenario.get_config(global_step)
         if new_task_id != current_task_id or new_config['length'] != current_config['length'] or abs(new_config['wind'] - current_config['wind']) > 1e-6:
-            # 任务切换或参数变化
+            # == 上帝视角评估逻辑 BEGIN ==
+            task_rewards = evaluate_on_all_tasks(model, task_scheduler, config_path, episodes_per_task=eval_episodes, seed=seed)
+            # 记录当前任务的baseline
+            if current_task_id not in task_baselines:
+                baseline = task_rewards.get(current_task_id)
+                if baseline is not None:
+                    task_baselines[current_task_id] = baseline
+                    metrics_tracker.record_task_performance(current_task_id, after_perf=baseline)
+            # 计算已见过任务的CF
+            for t in seen_tasks:
+                if t == current_task_id:
+                    continue
+                cf = task_rewards.get(t, 0.0) - task_baselines.get(t, 0.0)
+                cf_key = f"{t}_after_{current_task_id}"
+                metrics_tracker.cf_data[cf_key] = {
+                    'task_id': t,
+                    'new_task_id': current_task_id,
+                    'before_performance': task_baselines.get(t, 0.0),
+                    'after_performance': task_rewards.get(t, 0.0),
+                    'cf': cf
+                }
+                print(f"[CF] 任务 {t} 在训练任务 {current_task_id} 后性能变化: {cf:.2f}")
+            # 记录forward transfer
+            zero_shot = task_rewards.get(new_task_id)
+            if zero_shot is not None:
+                print(f"[Forward Transfer] 任务 {new_task_id} Zero-shot 性能: {zero_shot:.2f}")
+                metrics_tracker.record_task_performance(new_task_id, before_perf=zero_shot)
+            seen_tasks.add(new_task_id)
+            # == 上帝视角评估逻辑 END ==
             if new_task_id != current_task_id:
                 print(f"\n[任务切换] Step {global_step}: {current_config['task_name']} -> {new_config['task_name']}")
             env_wrapper.set_variant(length=new_config['length'], wind=new_config['wind'])
