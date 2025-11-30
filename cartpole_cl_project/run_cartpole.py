@@ -427,9 +427,17 @@ class MetricsTracker:
         for task_id, metrics in self.task_metrics.items():
             task_ids.append(task_id)
             rewards = metrics['episode_rewards']
-            avg_rewards.append(np.mean(rewards))
-            max_rewards.append(np.max(rewards))
-            min_rewards.append(np.min(rewards))
+            
+            # [修复] 检查列表是否为空
+            if len(rewards) > 0:
+                avg_rewards.append(np.mean(rewards))
+                max_rewards.append(np.max(rewards))
+                min_rewards.append(np.min(rewards))
+            else:
+                # 如果没有数据，填充默认值 0
+                avg_rewards.append(0.0)
+                max_rewards.append(0.0)
+                min_rewards.append(0.0)
         
         x = np.arange(len(task_ids))
         width = 0.25
@@ -1705,9 +1713,10 @@ def train_continual_learning(task_sequence, episodes_per_task=1000, config_path=
     # Initialize indicator tracker
     metrics_tracker = MetricsTracker()
     
-    # Create running directory
+    # Create running directory (使用绝对路径)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = f"runs/continual_learning_{timestamp}_seed{seed}"
+    run_dir = os.path.join(base_dir, "runs", f"continual_learning_{timestamp}_seed{seed}")
     os.makedirs(run_dir, exist_ok=True)
     
     task_scheduler = TaskScheduler(config_path)
@@ -1826,8 +1835,11 @@ def main():
     if args.train:
         if args.online_stream:
             print("开始完全在线流式训练模式（未知任务边界）...")
-            # 创建运行目录 (新结构: runs/{drift_type}/{pause_policy}/seed_{seed}/)
-            run_dir = os.path.join("runs", args.drift_type, args.pause_policy, f"seed_{args.seed}")
+            # 获取当前脚本的绝对目录
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            
+            # 创建运行目录 (使用绝对路径)
+            run_dir = os.path.join(base_dir, "runs", args.drift_type, args.pause_policy, f"seed_{args.seed}")
             os.makedirs(run_dir, exist_ok=True)
             
             # 初始化指标跟踪器
