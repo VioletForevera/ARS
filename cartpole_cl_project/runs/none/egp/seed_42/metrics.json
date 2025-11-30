@@ -1,0 +1,93 @@
+{
+  "1": {
+    "task_name": "T1: short+no wind",
+    "episode_rewards": [
+      32.0,
+      27.0,
+      40.0,
+      37.0,
+      30.0,
+      29.0,
+      52.0,
+      37.0,
+      45.0,
+      56.0,
+      44.0,
+      36.0
+    ],
+    "convergence_episode": null,
+    "final_performance": 39.0,
+    "before_performance": null,
+    "after_performance": 39.0,
+    "cumulative_regret": 5535.0,
+    "ewma_reward": 28.938723928758005,
+    "smoothness_tv": 106.0,
+    "_last_reward": 36.0,
+    "egp_triggers": 15,
+    "egp_paused_steps": 165
+  },
+  "2": {
+    "task_name": "T2: short+wind",
+    "episode_rewards": [
+      66.0,
+      44.0,
+      22.0,
+      28.0,
+      64.0,
+      35.0,
+      51.0,
+      30.0,
+      31.0,
+      61.0,
+      45.0
+    ],
+    "convergence_episode": null,
+    "final_performance": 47.0,
+    "before_performance": 44.0,
+    "after_performance": 47.0,
+    "cumulative_regret": 5023.0,
+    "ewma_reward": 29.79423443826001,
+    "smoothness_tv": 199.0,
+    "_last_reward": 45.0,
+    "egp_triggers": 15,
+    "egp_paused_steps": 165
+  },
+  "3": {
+    "task_name": "T3: long+no wind",
+    "episode_rewards": [
+      60.0,
+      58.0,
+      57.0,
+      66.0,
+      48.0,
+      188.0
+    ],
+    "convergence_episode": null,
+    "final_performance": 124.5,
+    "before_performance": 45.0,
+    "after_performance": 124.5,
+    "cumulative_regret": 2523.0,
+    "ewma_reward": 39.969620000000006,
+    "smoothness_tv": 170.0,
+    "_last_reward": 188.0,
+    "egp_triggers": 15,
+    "egp_paused_steps": 165
+  },
+  "4": {
+    "task_name": "T4: long+wind",
+    "episode_rewards": [
+      144.0,
+      360.0
+    ],
+    "convergence_episode": null,
+    "final_performance": 396.0,
+    "before_performance": 135.5,
+    "after_performance": 396.0,
+    "cumulative_regret": 496.0,
+    "ewma_reward": 48.96,
+    "smoothness_tv": 216.0,
+    "_last_reward": 360.0,
+    "egp_triggers": 15,
+    "egp_paused_steps": 165
+  }
+}
