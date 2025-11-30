@@ -21,6 +21,7 @@ from datetime import datetime
 from typing import Dict
 from environments import CartPoleCL, TaskScheduler, DynamicScenario
 import collections
+import random
 
 class MetricsTracker:
     """指标跟踪器"""
@@ -398,7 +399,7 @@ class MetricsTracker:
         ax.set_ylabel('Convergence Episodes')
         ax.set_title('Convergence Speed by Task')
         ax.set_xticks(task_ids)
-        ax.set_xticklabels([f'T{tid}' for tid in task_ids])
+        ax1.set_xticklabels([f'T{tid}' for tid in task_ids])
         
         # 添加数值标签
         for bar, speed in zip(bars, conv_speeds):
@@ -830,6 +831,53 @@ class DQNNetwork(nn.Module):
     
     def forward(self, x):
         return self.network(x)
+
+class EWCConsolidator:
+    """
+    轻量级 EWC (Elastic Weight Consolidation) 实现。
+    用于在暂停时刻巩固重要参数，防止遗忘。
+    """
+    def __init__(self, lambda_ewc=5000.0):
+        self.lambda_ewc = lambda_ewc
+        self.fisher = {}   # 存储 Fisher 信息矩阵 (对角线近似)
+        self.params = {}   # 存储旧任务的参数锚点 (θ*)
+        self.device = torch.device("cpu") # CartPole 默认使用 CPU
+
+    def update_fisher(self, model, dataset_samples):
+        """
+        在暂停时刻更新 Fisher 矩阵和锚点参数。
+        Args:
+            model: 当前的 DQN 网络
+            dataset_samples: 从 ReplayBuffer 中采样的一批数据 [(state, action, reward, next_state, done), ...]
+        """
+        model.eval()
+        temp_fisher = {n: torch.zeros_like(p) for n, p in model.named_parameters() if p.requires_grad}
+        states = torch.FloatTensor(np.array([x[0] for x in dataset_samples])).to(self.device)
+        model.zero_grad()
+        q_values = model(states)
+        log_probs = torch.nn.functional.log_softmax(q_values, dim=1)
+        for i in range(q_values.shape[1]):
+            loss = -log_probs[:, i].mean()
+            loss.backward(retain_graph=True)
+            for n, p in model.named_parameters():
+                if p.grad is not None:
+                    temp_fisher[n] += p.grad.pow(2) * (1.0 / q_values.shape[1])
+            model.zero_grad()
+        for n, p in model.named_parameters():
+            if p.requires_grad:
+                self.params[n] = p.detach().clone()
+                self.fisher[n] = temp_fisher[n].detach()
+        model.train()
+        print(f"  [EWC] 知识巩固完成 (Consolidation Complete). 保护了 {len(self.params)} 层参数.")
+    def penalty(self, model):
+        """计算 EWC 惩罚损失: λ * sum(F * (θ - θ*)^2)"""
+        if not self.fisher:
+            return 0.0
+        loss = 0.0
+        for n, p in model.named_parameters():
+            if n in self.fisher:
+                loss += (self.fisher[n] * (p - self.params[n]).pow(2)).sum()
+        return self.lambda_ewc * loss
 
 def train(episodes=1000, max_steps=500, task_id=0, config_path="config/cartpole_config.yaml", 
           metrics_tracker=None, before_performance=None, entropy_temperature=1.0, egp_mode='high',
@@ -1300,7 +1348,8 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=500, config_pa
                        egp_window=20, egp_z_hi=1.8, egp_z_lo=1.5, egp_pause_steps=10, egp_z_threshold=-1.5,
                        pause_policy='egp', fixed_k=10, seed=0, steps_per_task=20000,
                        drift_type='none', drift_slope=0.0, drift_delta=0.0, drift_amp=0.0, drift_freq=0.0,
-                       eval_freq=1000, eval_episodes=5, epsilon_decay=0.995):
+                       eval_freq=1000, eval_episodes=5, epsilon_decay=0.995,
+                       enable_ewc=False, ewc_lambda=5000.0):
     """
     完全在线持续学习训练（未知任务边界）
     
@@ -1425,6 +1474,10 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=500, config_pa
     seen_tasks = set()
     seen_tasks.add(current_task_id)
     
+    # 初始化 EWC
+    ewc = EWCConsolidator(lambda_ewc=ewc_lambda)
+    last_trig_id = 0
+    
     # 主训练循环
     while global_step < total_steps:
         # 检查是否需要更新环境配置（任务切换）
@@ -1486,6 +1539,14 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=500, config_pa
         # 暂停策略判断
         if pause_policy == 'egp':
             pause, Z, trig_id = entropy_gate.step(H)
+            # === EWC 触发逻辑 (新增) ===
+            if enable_ewc and pause and trig_id > last_trig_id:
+                print(f"\n[EWC] 触发巩固! Step {global_step} (Entropy Trigger #{trig_id})")
+                if len(replay_buffer) >= batch_size:
+                    sample_size = min(len(replay_buffer), 128)
+                    fisher_samples = random.sample(replay_buffer, sample_size)
+                    ewc.update_fisher(model, fisher_samples)
+                last_trig_id = trig_id
         elif pause_policy == 'fixed':
             fixed_global_step += 1
             if fixed_countdown > 0:
@@ -1538,7 +1599,11 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=500, config_pa
                 # 计算损失
                 loss = criterion(current_q_values.squeeze(), target_q_values)
                 
-                # 反向传播
+                # === EWC 损失修正 (新增) ===
+                if enable_ewc:
+                    ewc_loss = ewc.penalty(model)
+                    loss += ewc_loss
+                
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -1585,12 +1650,6 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=500, config_pa
     
     env_wrapper.close()
     
-    # 保存模型
-    save_path = Path("runs") / "online_stream_model.pth"
-    save_path.parent.mkdir(exist_ok=True)
-    torch.save(model.state_dict(), save_path)
-    print(f"\n模型已保存到: {save_path}")
-    
     # 记录最终统计
     if metrics_tracker is not None:
         if pause_policy == 'egp':
@@ -1605,31 +1664,7 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=500, config_pa
                     metrics_tracker.task_metrics[task_id]['egp_triggers'] = fixed_triggers
                     metrics_tracker.task_metrics[task_id]['egp_paused_steps'] = fixed_paused_steps
     
-    # == 训练结束后的最终评估 ==
-    print("[训练结束] 正在进行最终全任务评估...")
-    task_rewards = evaluate_on_all_tasks(model, task_scheduler, config_path, episodes_per_task=eval_episodes, seed=seed)
-    # 记录最后一个任务 Baseline
-    if current_task_id not in task_baselines:
-        baseline = task_rewards.get(current_task_id)
-        if baseline is not None:
-            task_baselines[current_task_id] = baseline
-            metrics_tracker.record_task_performance(current_task_id, after_perf=baseline)
-    # 对之前所有seen_tasks任务计算最终CF
-    for t in seen_tasks:
-        if t == current_task_id:
-            continue
-        cf = task_rewards.get(t, 0.0) - task_baselines.get(t, 0.0)
-        cf_key = f"{t}_after_{current_task_id}_final"
-        metrics_tracker.cf_data[cf_key] = {
-            'task_id': t,
-            'new_task_id': current_task_id,
-            'before_performance': task_baselines.get(t, 0.0),
-            'after_performance': task_rewards.get(t, 0.0),
-            'cf': cf
-        }
-        print(f"[CF-最终] 任务 {t} 在训练任务 {current_task_id} 后的最终性能变化: {cf:.2f}")
-    
-    return save_path, metrics_tracker
+    return None, metrics_tracker
 
 def train_continual_learning(task_sequence, episodes_per_task=1000, config_path="config/cartpole_config.yaml",
                              entropy_temperature=1.0, egp_mode='high', egp_window=20, egp_z_hi=1.8, egp_z_lo=1.5,
@@ -1755,6 +1790,8 @@ def main():
     parser.add_argument('--eval-freq', type=int, default=1000, help='评估频率（每多少步评估一次）')
     parser.add_argument('--eval-episodes', type=int, default=5, help='每次评估的回合数')
     parser.add_argument('--epsilon-decay', type=float, default=0.995, help='Epsilon decay rate (per step or episode)')
+    parser.add_argument('--enable-ewc', action='store_true', help='启用 EWC (Elastic Weight Consolidation) 机制')
+    parser.add_argument('--ewc-lambda', type=float, default=5000.0, help='EWC 正则化系数 lambda')
     args = parser.parse_args()
     
     print("CartPole强化学习演示")
@@ -1794,7 +1831,9 @@ def main():
                 drift_freq=args.drift_freq,
                 eval_freq=args.eval_freq,
                 eval_episodes=args.eval_episodes,
-                epsilon_decay=args.epsilon_decay
+                epsilon_decay=args.epsilon_decay,
+                enable_ewc=args.enable_ewc,
+                ewc_lambda=args.ewc_lambda
             )
             
             # 保存指标
