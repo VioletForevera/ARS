@@ -1605,6 +1605,30 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=500, config_pa
                     metrics_tracker.task_metrics[task_id]['egp_triggers'] = fixed_triggers
                     metrics_tracker.task_metrics[task_id]['egp_paused_steps'] = fixed_paused_steps
     
+    # == 训练结束后的最终评估 ==
+    print("[训练结束] 正在进行最终全任务评估...")
+    task_rewards = evaluate_on_all_tasks(model, task_scheduler, config_path, episodes_per_task=eval_episodes, seed=seed)
+    # 记录最后一个任务 Baseline
+    if current_task_id not in task_baselines:
+        baseline = task_rewards.get(current_task_id)
+        if baseline is not None:
+            task_baselines[current_task_id] = baseline
+            metrics_tracker.record_task_performance(current_task_id, after_perf=baseline)
+    # 对之前所有seen_tasks任务计算最终CF
+    for t in seen_tasks:
+        if t == current_task_id:
+            continue
+        cf = task_rewards.get(t, 0.0) - task_baselines.get(t, 0.0)
+        cf_key = f"{t}_after_{current_task_id}_final"
+        metrics_tracker.cf_data[cf_key] = {
+            'task_id': t,
+            'new_task_id': current_task_id,
+            'before_performance': task_baselines.get(t, 0.0),
+            'after_performance': task_rewards.get(t, 0.0),
+            'cf': cf
+        }
+        print(f"[CF-最终] 任务 {t} 在训练任务 {current_task_id} 后的最终性能变化: {cf:.2f}")
+    
     return save_path, metrics_tracker
 
 def train_continual_learning(task_sequence, episodes_per_task=1000, config_path="config/cartpole_config.yaml",
