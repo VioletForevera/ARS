@@ -1031,6 +1031,11 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_pa
         print(f"固定策略: 每 {fixed_k} 步触发，暂停 {egp_pause_steps} 步")
     print("-" * 60)
     
+    # == 上帝视角评估变量初始化 ==
+    task_baselines = {}
+    seen_tasks = set()
+    seen_tasks.add(initial_task_id)
+    
     while global_step < total_steps:
         new_config, new_task_id = scenario.get_config(global_step)
         if (new_task_id != current_task_id or 
@@ -1038,6 +1043,43 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_pa
             abs(new_config['force_mag'] - current_config['force_mag']) > 1e-9):
             if new_task_id != current_task_id:
                 print(f"\n[任务切换] Step {global_step}: {current_config['task_name']} -> {new_config['task_name']}")
+                
+                # == 上帝视角评估逻辑 BEGIN ==
+                print(f"\n[评估] 任务切换前全任务评估 (Step {global_step})...")
+                task_rewards = evaluate_on_all_tasks(model, task_scheduler, episodes_per_task=eval_episodes, seed=seed)
+                
+                # 1. 记录刚结束任务的 Baseline
+                if current_task_id not in task_baselines:
+                    baseline = task_rewards.get(current_task_id)
+                    if baseline is not None:
+                        task_baselines[current_task_id] = baseline
+                        metrics_tracker.record_task_performance(current_task_id, after_perf=baseline)
+                
+                # 2. 计算已见过任务的 CF
+                for t in seen_tasks:
+                    if t == current_task_id:
+                        continue
+                    # CF = 当前性能 - 基准性能
+                    cf = task_rewards.get(t, -200.0) - task_baselines.get(t, -200.0)
+                    
+                    metrics_tracker.cf_data[f"{t}_after_{current_task_id}"] = {
+                        'task_id': t,
+                        'new_task_id': current_task_id,
+                        'before_performance': task_baselines.get(t, -200.0),
+                        'after_performance': task_rewards.get(t, -200.0),
+                        'cf': cf
+                    }
+                    print(f"[CF] 任务 {t} 在训练任务 {current_task_id} 后性能变化: {cf:.2f}")
+                
+                # 3. 记录新任务的 Forward Transfer (Zero-shot)
+                zero_shot = task_rewards.get(new_task_id)
+                if zero_shot is not None:
+                    print(f"[Forward Transfer] 任务 {new_task_id} Zero-shot 性能: {zero_shot:.2f}")
+                    metrics_tracker.record_task_performance(new_task_id, before_perf=zero_shot)
+                
+                seen_tasks.add(new_task_id)
+                # == 上帝视角评估逻辑 END ==
+                
             env_wrapper.set_variant(gravity=new_config['gravity'], force_mag=new_config['force_mag'])
             current_config = new_config
             current_task_id = new_task_id
@@ -1154,6 +1196,32 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_pa
                 task_name = task_scheduler.get_task_by_id(tid).get('name', f'T{tid}')
                 print(f"  任务 {tid} ({task_name}): {avg_reward:.2f}")
             print("-" * 40)
+    
+    # ===========================
+    # [修复] 训练结束后的最终评估
+    # ===========================
+    print(f"\n[训练结束] 正在进行最终全任务评估 (Step {global_step})...")
+    final_rewards = evaluate_on_all_tasks(model, task_scheduler, episodes_per_task=eval_episodes, seed=seed)
+    
+    # 记录最后一个任务的 Baseline
+    if current_task_id not in task_baselines:
+        if current_task_id in final_rewards:
+            task_baselines[current_task_id] = final_rewards[current_task_id]
+            metrics_tracker.record_task_performance(current_task_id, after_perf=final_rewards[current_task_id])
+            
+    # 计算最终 CF
+    for t in seen_tasks:
+        if t == current_task_id:
+            continue
+        cf = final_rewards.get(t, -200.0) - task_baselines.get(t, -200.0)
+        metrics_tracker.cf_data[f"{t}_after_{current_task_id}"] = {
+            'task_id': t,
+            'new_task_id': current_task_id,
+            'before_performance': task_baselines.get(t, -200.0),
+            'after_performance': final_rewards.get(t, -200.0),
+            'cf': cf
+        }
+        print(f"[Final CF] 任务 {t} 最终性能变化: {cf:.2f}")
     
     env_wrapper.close()
     
