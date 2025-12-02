@@ -7,6 +7,7 @@ import gymnasium as gym
 import time
 import argparse
 import collections
+import random
 from typing import Dict
 import torch
 import torch.nn as nn
@@ -826,6 +827,64 @@ class EntropyGateController:
         return False, Z, self.trigger_count
 
 
+class EWCConsolidator:
+    """
+    轻量级 EWC (Elastic Weight Consolidation) 实现。
+    用于在暂停时刻巩固重要参数，防止遗忘。
+    """
+    def __init__(self, lambda_ewc=5000.0):
+        self.lambda_ewc = lambda_ewc
+        self.fisher = {}   # 存储 Fisher 信息矩阵 (对角线近似)
+        self.params = {}   # 存储旧任务的参数锚点 (θ*)
+        self.device = torch.device("cpu")
+
+    def update_fisher(self, model, dataset_samples):
+        """
+        在暂停时刻更新 Fisher 矩阵和锚点参数。
+        Args:
+         model: 当前的 DQN 网络
+            dataset_samples: 从 ReplayBuffer 中采样的一批数据 [(obs, action, reward, next_obs, done), ...]
+        """
+        model.eval()
+        # MountainCar ReplayBuffer存储结构: (obs, action, reward, next_obs, done)
+        temp_fisher = {n: torch.zeros_like(p) for n, p in model.named_parameters() if p.requires_grad}
+        
+        # 提取 state (batch[0]) 并转为 tensor
+        states = torch.FloatTensor(np.array([x[0] for x in dataset_samples])).to(self.device)
+        
+        model.zero_grad()
+        q_values = model(states)
+        log_probs = torch.nn.functional.log_softmax(q_values, dim=1)
+        
+        for i in range(q_values.shape[1]):
+            loss = -log_probs[:, i].mean()
+            loss.backward(retain_graph=True)
+            
+            for n, p in model.named_parameters():
+                if p.grad is not None:
+                    temp_fisher[n] += p.grad.pow(2) * (1.0 / q_values.shape[1])
+            model.zero_grad()
+
+        for n, p in model.named_parameters():
+            if p.requires_grad:
+                self.params[n] = p.detach().clone()
+                self.fisher[n] = temp_fisher[n].detach()
+        
+        model.train()
+        print(f"  [EWC] 知识巩固完成 (Consolidation Complete). 保护了 {len(self.params)} 层参数.")
+
+    def penalty(self, model):
+        """计算 EWC 惩罚损失: λ * sum(F * (θ - θ*)^2)"""
+        if not self.fisher:
+            return 0.0
+        loss = 0.0
+        for n, p in model.named_parameters():
+            if n in self.fisher:
+                loss += (self.fisher[n] * (p - self.params[n]).pow(2)).sum()
+        return self.lambda_ewc * loss
+
+
+
 class DQNNetwork(nn.Module):
     def __init__(self, input_size=2, hidden_size=256, output_size=3):
         super().__init__()
@@ -890,7 +949,8 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_pa
                        egp_window=20, egp_z_hi=1.8, egp_z_lo=1.5, egp_pause_steps=10, egp_z_threshold=-1.5,
                        pause_policy='egp', fixed_k=10, seed=0, steps_per_task=25000,
                        drift_type='none', drift_slope=0.0, drift_delta=0.0, drift_amp=0.0, drift_freq=0.0,
-                       eval_freq=1000, eval_episodes=5, epsilon_decay=0.99995, output_dir="runs"):
+                       eval_freq=1000, eval_episodes=5, epsilon_decay=0.99995, output_dir="runs",
+                       enable_ewc=False, ewc_lambda=5000.0):
     """
     MountainCar 完全在线流式训练（未知任务边界）实现
     """
@@ -949,6 +1009,10 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_pa
     fixed_triggers = 0
     fixed_paused_steps = 0
     
+    # 初始化 EWC
+    ewc = EWCConsolidator(lambda_ewc=ewc_lambda)
+    last_trig_id = 0
+    
     global_step = 0
     episode_count = 0
     current_episode_reward = 0.0
@@ -993,6 +1057,14 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_pa
         
         if pause_policy == 'egp':
             pause, Z, trig_id = entropy_gate.step(H)
+            # === EWC 触发逻辑 ===
+            if enable_ewc and pause and trig_id > last_trig_id:
+                print(f"\n[EWC] 触发巩固! Step {global_step} (Entropy Trigger #{trig_id})")
+                if len(replay_buffer) >= batch_size:
+                    sample_size = min(len(replay_buffer), 128)
+                    fisher_samples = random.sample(replay_buffer, sample_size)
+                    ewc.update_fisher(model, fisher_samples)
+                last_trig_id = trig_id
         elif pause_policy == 'fixed':
             fixed_global_step += 1
             if fixed_countdown > 0:
@@ -1046,6 +1118,12 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_pa
                 next_q = target_model(next_states).max(1)[0]
                 target_q = rewards_batch + (gamma * next_q * (~dones))
             loss = criterion(current_q, target_q)
+            
+            # === EWC 损失修正 ===
+            if enable_ewc:
+                ewc_loss = ewc.penalty(model)
+                loss += ewc_loss
+            
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -1547,6 +1625,8 @@ def main():
     parser.add_argument('--drift-amp', type=float, default=0.0, help='periodic 漂移振幅')
     parser.add_argument('--drift-freq', type=float, default=0.0, help='periodic 漂移频率')
     parser.add_argument('--epsilon-decay', type=float, default=0.99995, help='在线流式训练 epsilon 衰减')
+    parser.add_argument('--enable-ewc', action='store_true', help='启用 EWC 巩固机制')
+    parser.add_argument('--ewc-lambda', type=float, default=5000.0, help='EWC 正则化强度')
     args = parser.parse_args()
     
     print("MountainCar强化学习演示")
@@ -1555,7 +1635,15 @@ def main():
     if args.train:
         if args.online_stream:
             print("开始完全在线流式训练模式（MountainCar）...")
-            run_dir = os.path.join("runs", args.drift_type, args.pause_policy, f"seed_{args.seed}")
+            
+            # 路径逻辑：根据是否启用 EWC 决定存储位置
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            if args.enable_ewc:
+                # 有 EWC -> 存入 runs/
+                run_dir = os.path.join(base_dir, "runs", args.drift_type, args.pause_policy, f"seed_{args.seed}")
+            else:
+                # 无 EWC -> 存入 runs_mountaincar_No_EWC/
+                run_dir = os.path.join(base_dir, "runs_mountaincar_No_EWC", args.drift_type, args.pause_policy, f"seed_{args.seed}")
             os.makedirs(run_dir, exist_ok=True)
             
             metrics_tracker = MetricsTracker()
@@ -1583,10 +1671,12 @@ def main():
                 eval_freq=args.eval_freq,
                 eval_episodes=args.eval_episodes,
                 epsilon_decay=args.epsilon_decay,
-                output_dir=run_dir
+                output_dir=run_dir,
+                enable_ewc=args.enable_ewc,
+                ewc_lambda=args.ewc_lambda
             )
-            
-            metrics_tracker.save_metrics(run_dir)
+            if metrics_tracker:
+                metrics_tracker.save_metrics(run_dir)
             print("\n在线流式训练完成！")
             print(f"结果保存在: {run_dir}")
             print("查看指标: metrics_report.txt / anytime_performance.png")
