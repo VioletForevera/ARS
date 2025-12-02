@@ -1,0 +1,401 @@
+task_id,task_name,global_step,average_reward
+1,T1: short+no wind,250,36.4
+1,T1: short+no wind,500,30.2
+1,T1: short+no wind,750,34.8
+1,T1: short+no wind,1000,32.4
+1,T1: short+no wind,1250,34.4
+1,T1: short+no wind,1500,74.2
+1,T1: short+no wind,1750,82.0
+1,T1: short+no wind,2000,110.4
+1,T1: short+no wind,2250,176.2
+1,T1: short+no wind,2500,387.6
+1,T1: short+no wind,2750,408.6
+1,T1: short+no wind,3000,408.6
+1,T1: short+no wind,3250,408.6
+1,T1: short+no wind,3500,408.6
+1,T1: short+no wind,3750,408.6
+1,T1: short+no wind,4000,408.6
+1,T1: short+no wind,4250,401.0
+1,T1: short+no wind,4500,379.6
+1,T1: short+no wind,4750,374.8
+1,T1: short+no wind,5000,377.2
+1,T1: short+no wind,5250,394.4
+1,T1: short+no wind,5500,394.4
+1,T1: short+no wind,5750,332.2
+1,T1: short+no wind,6000,376.6
+1,T1: short+no wind,6250,342.0
+1,T1: short+no wind,6500,373.6
+1,T1: short+no wind,6750,385.8
+1,T1: short+no wind,7000,360.6
+1,T1: short+no wind,7250,334.4
+1,T1: short+no wind,7500,365.0
+1,T1: short+no wind,7750,374.6
+1,T1: short+no wind,8000,337.4
+1,T1: short+no wind,8250,365.8
+1,T1: short+no wind,8500,340.2
+1,T1: short+no wind,8750,321.2
+1,T1: short+no wind,9000,342.6
+1,T1: short+no wind,9250,327.6
+1,T1: short+no wind,9500,324.4
+1,T1: short+no wind,9750,382.6
+1,T1: short+no wind,10000,383.6
+1,T1: short+no wind,10250,337.2
+1,T1: short+no wind,10500,363.2
+1,T1: short+no wind,10750,344.4
+1,T1: short+no wind,11000,334.4
+1,T1: short+no wind,11250,369.4
+1,T1: short+no wind,11500,354.6
+1,T1: short+no wind,11750,337.2
+1,T1: short+no wind,12000,364.4
+1,T1: short+no wind,12250,375.2
+1,T1: short+no wind,12500,352.2
+1,T1: short+no wind,12750,376.8
+1,T1: short+no wind,13000,376.8
+1,T1: short+no wind,13250,381.6
+1,T1: short+no wind,13500,378.8
+1,T1: short+no wind,13750,338.2
+1,T1: short+no wind,14000,359.2
+1,T1: short+no wind,14250,331.8
+1,T1: short+no wind,14500,358.8
+1,T1: short+no wind,14750,367.6
+1,T1: short+no wind,15000,325.6
+1,T1: short+no wind,15250,322.2
+1,T1: short+no wind,15500,335.6
+1,T1: short+no wind,15750,310.6
+1,T1: short+no wind,16000,314.0
+1,T1: short+no wind,16250,325.0
+1,T1: short+no wind,16500,382.8
+1,T1: short+no wind,16750,332.8
+1,T1: short+no wind,17000,328.2
+1,T1: short+no wind,17250,380.0
+1,T1: short+no wind,17500,374.6
+1,T1: short+no wind,17750,331.0
+1,T1: short+no wind,18000,351.4
+1,T1: short+no wind,18250,332.4
+1,T1: short+no wind,18500,358.2
+1,T1: short+no wind,18750,339.8
+1,T1: short+no wind,19000,334.4
+1,T1: short+no wind,19250,358.0
+1,T1: short+no wind,19500,346.4
+1,T1: short+no wind,19750,344.6
+1,T1: short+no wind,20000,362.6
+1,T1: short+no wind,20250,335.4
+1,T1: short+no wind,20500,343.0
+1,T1: short+no wind,20750,380.6
+1,T1: short+no wind,21000,344.8
+1,T1: short+no wind,21250,364.2
+1,T1: short+no wind,21500,318.2
+1,T1: short+no wind,21750,349.4
+1,T1: short+no wind,22000,331.2
+1,T1: short+no wind,22250,340.4
+1,T1: short+no wind,22500,296.2
+1,T1: short+no wind,22750,357.4
+1,T1: short+no wind,23000,317.0
+1,T1: short+no wind,23250,358.0
+1,T1: short+no wind,23500,384.6
+1,T1: short+no wind,23750,372.6
+1,T1: short+no wind,24000,363.6
+1,T1: short+no wind,24250,330.6
+1,T1: short+no wind,24500,372.4
+1,T1: short+no wind,24750,366.6
+1,T1: short+no wind,25000,327.2
+2,T2: short+wind,250,32.2
+2,T2: short+wind,500,30.6
+2,T2: short+wind,750,35.4
+2,T2: short+wind,1000,33.0
+2,T2: short+wind,1250,35.2
+2,T2: short+wind,1500,71.6
+2,T2: short+wind,1750,74.2
+2,T2: short+wind,2000,107.4
+2,T2: short+wind,2250,157.4
+2,T2: short+wind,2500,325.0
+2,T2: short+wind,2750,325.2
+2,T2: short+wind,3000,407.2
+2,T2: short+wind,3250,407.2
+2,T2: short+wind,3500,407.2
+2,T2: short+wind,3750,407.2
+2,T2: short+wind,4000,407.2
+2,T2: short+wind,4250,406.4
+2,T2: short+wind,4500,391.2
+2,T2: short+wind,4750,389.0
+2,T2: short+wind,5000,389.8
+2,T2: short+wind,5250,401.0
+2,T2: short+wind,5500,398.8
+2,T2: short+wind,5750,338.8
+2,T2: short+wind,6000,388.2
+2,T2: short+wind,6250,357.4
+2,T2: short+wind,6500,384.2
+2,T2: short+wind,6750,391.2
+2,T2: short+wind,7000,376.4
+2,T2: short+wind,7250,346.0
+2,T2: short+wind,7500,382.8
+2,T2: short+wind,7750,387.0
+2,T2: short+wind,8000,346.6
+2,T2: short+wind,8250,373.6
+2,T2: short+wind,8500,350.2
+2,T2: short+wind,8750,331.0
+2,T2: short+wind,9000,352.4
+2,T2: short+wind,9250,337.8
+2,T2: short+wind,9500,334.0
+2,T2: short+wind,9750,389.4
+2,T2: short+wind,10000,388.4
+2,T2: short+wind,10250,348.2
+2,T2: short+wind,10500,379.0
+2,T2: short+wind,10750,356.2
+2,T2: short+wind,11000,345.4
+2,T2: short+wind,11250,380.6
+2,T2: short+wind,11500,374.0
+2,T2: short+wind,11750,349.4
+2,T2: short+wind,12000,381.0
+2,T2: short+wind,12250,382.2
+2,T2: short+wind,12500,369.8
+2,T2: short+wind,12750,384.0
+2,T2: short+wind,13000,383.4
+2,T2: short+wind,13250,388.4
+2,T2: short+wind,13500,383.8
+2,T2: short+wind,13750,349.4
+2,T2: short+wind,14000,371.6
+2,T2: short+wind,14250,342.2
+2,T2: short+wind,14500,375.4
+2,T2: short+wind,14750,381.8
+2,T2: short+wind,15000,334.6
+2,T2: short+wind,15250,330.6
+2,T2: short+wind,15500,346.6
+2,T2: short+wind,15750,320.6
+2,T2: short+wind,16000,321.6
+2,T2: short+wind,16250,334.6
+2,T2: short+wind,16500,389.4
+2,T2: short+wind,16750,345.2
+2,T2: short+wind,17000,340.8
+2,T2: short+wind,17250,386.2
+2,T2: short+wind,17500,382.4
+2,T2: short+wind,17750,347.8
+2,T2: short+wind,18000,371.8
+2,T2: short+wind,18250,347.4
+2,T2: short+wind,18500,376.0
+2,T2: short+wind,18750,357.8
+2,T2: short+wind,19000,349.4
+2,T2: short+wind,19250,376.0
+2,T2: short+wind,19500,360.8
+2,T2: short+wind,19750,356.8
+2,T2: short+wind,20000,375.2
+2,T2: short+wind,20250,347.2
+2,T2: short+wind,20500,359.6
+2,T2: short+wind,20750,381.4
+2,T2: short+wind,21000,359.8
+2,T2: short+wind,21250,375.2
+2,T2: short+wind,21500,325.8
+2,T2: short+wind,21750,366.2
+2,T2: short+wind,22000,342.6
+2,T2: short+wind,22250,353.4
+2,T2: short+wind,22500,309.0
+2,T2: short+wind,22750,374.8
+2,T2: short+wind,23000,325.4
+2,T2: short+wind,23250,373.2
+2,T2: short+wind,23500,388.0
+2,T2: short+wind,23750,383.0
+2,T2: short+wind,24000,377.2
+2,T2: short+wind,24250,339.2
+2,T2: short+wind,24500,381.0
+2,T2: short+wind,24750,379.2
+2,T2: short+wind,25000,335.6
+3,T3: long+no wind,250,34.6
+3,T3: long+no wind,500,36.2
+3,T3: long+no wind,750,41.6
+3,T3: long+no wind,1000,37.4
+3,T3: long+no wind,1250,42.0
+3,T3: long+no wind,1500,98.2
+3,T3: long+no wind,1750,106.6
+3,T3: long+no wind,2000,172.0
+3,T3: long+no wind,2250,206.8
+3,T3: long+no wind,2500,432.2
+3,T3: long+no wind,2750,500.0
+3,T3: long+no wind,3000,500.0
+3,T3: long+no wind,3250,500.0
+3,T3: long+no wind,3500,500.0
+3,T3: long+no wind,3750,477.6
+3,T3: long+no wind,4000,474.2
+3,T3: long+no wind,4250,475.8
+3,T3: long+no wind,4500,478.2
+3,T3: long+no wind,4750,449.0
+3,T3: long+no wind,5000,463.0
+3,T3: long+no wind,5250,457.0
+3,T3: long+no wind,5500,463.2
+3,T3: long+no wind,5750,431.0
+3,T3: long+no wind,6000,453.2
+3,T3: long+no wind,6250,426.6
+3,T3: long+no wind,6500,441.0
+3,T3: long+no wind,6750,457.2
+3,T3: long+no wind,7000,452.2
+3,T3: long+no wind,7250,437.0
+3,T3: long+no wind,7500,433.4
+3,T3: long+no wind,7750,448.2
+3,T3: long+no wind,8000,437.0
+3,T3: long+no wind,8250,457.2
+3,T3: long+no wind,8500,441.2
+3,T3: long+no wind,8750,421.4
+3,T3: long+no wind,9000,443.0
+3,T3: long+no wind,9250,429.6
+3,T3: long+no wind,9500,423.8
+3,T3: long+no wind,9750,481.0
+3,T3: long+no wind,10000,466.8
+3,T3: long+no wind,10250,439.8
+3,T3: long+no wind,10500,468.6
+3,T3: long+no wind,10750,445.2
+3,T3: long+no wind,11000,438.0
+3,T3: long+no wind,11250,466.6
+3,T3: long+no wind,11500,462.6
+3,T3: long+no wind,11750,439.2
+3,T3: long+no wind,12000,451.8
+3,T3: long+no wind,12250,458.0
+3,T3: long+no wind,12500,443.2
+3,T3: long+no wind,12750,476.8
+3,T3: long+no wind,13000,459.0
+3,T3: long+no wind,13250,453.0
+3,T3: long+no wind,13500,446.8
+3,T3: long+no wind,13750,422.8
+3,T3: long+no wind,14000,436.6
+3,T3: long+no wind,14250,415.4
+3,T3: long+no wind,14500,450.4
+3,T3: long+no wind,14750,430.4
+3,T3: long+no wind,15000,396.8
+3,T3: long+no wind,15250,390.0
+3,T3: long+no wind,15500,397.6
+3,T3: long+no wind,15750,406.8
+3,T3: long+no wind,16000,388.6
+3,T3: long+no wind,16250,402.2
+3,T3: long+no wind,16500,442.2
+3,T3: long+no wind,16750,397.4
+3,T3: long+no wind,17000,407.0
+3,T3: long+no wind,17250,434.8
+3,T3: long+no wind,17500,426.6
+3,T3: long+no wind,17750,401.4
+3,T3: long+no wind,18000,418.2
+3,T3: long+no wind,18250,422.2
+3,T3: long+no wind,18500,432.2
+3,T3: long+no wind,18750,431.4
+3,T3: long+no wind,19000,409.6
+3,T3: long+no wind,19250,419.6
+3,T3: long+no wind,19500,417.4
+3,T3: long+no wind,19750,399.6
+3,T3: long+no wind,20000,417.6
+3,T3: long+no wind,20250,397.2
+3,T3: long+no wind,20500,409.0
+3,T3: long+no wind,20750,429.0
+3,T3: long+no wind,21000,402.8
+3,T3: long+no wind,21250,416.2
+3,T3: long+no wind,21500,375.4
+3,T3: long+no wind,21750,406.8
+3,T3: long+no wind,22000,400.0
+3,T3: long+no wind,22250,400.4
+3,T3: long+no wind,22500,376.4
+3,T3: long+no wind,22750,424.8
+3,T3: long+no wind,23000,373.8
+3,T3: long+no wind,23250,426.6
+3,T3: long+no wind,23500,440.2
+3,T3: long+no wind,23750,423.4
+3,T3: long+no wind,24000,414.2
+3,T3: long+no wind,24250,388.0
+3,T3: long+no wind,24500,424.8
+3,T3: long+no wind,24750,416.6
+3,T3: long+no wind,25000,385.4
+4,T4: long+wind,250,31.8
+4,T4: long+wind,500,40.2
+4,T4: long+wind,750,47.4
+4,T4: long+wind,1000,43.4
+4,T4: long+wind,1250,47.0
+4,T4: long+wind,1500,93.6
+4,T4: long+wind,1750,101.2
+4,T4: long+wind,2000,158.4
+4,T4: long+wind,2250,198.8
+4,T4: long+wind,2500,407.0
+4,T4: long+wind,2750,416.4
+4,T4: long+wind,3000,416.4
+4,T4: long+wind,3250,416.4
+4,T4: long+wind,3500,416.4
+4,T4: long+wind,3750,416.4
+4,T4: long+wind,4000,416.4
+4,T4: long+wind,4250,416.4
+4,T4: long+wind,4500,402.6
+4,T4: long+wind,4750,400.6
+4,T4: long+wind,5000,402.0
+4,T4: long+wind,5250,416.4
+4,T4: long+wind,5500,415.0
+4,T4: long+wind,5750,358.0
+4,T4: long+wind,6000,402.0
+4,T4: long+wind,6250,376.8
+4,T4: long+wind,6500,398.4
+4,T4: long+wind,6750,404.8
+4,T4: long+wind,7000,390.8
+4,T4: long+wind,7250,361.2
+4,T4: long+wind,7500,397.2
+4,T4: long+wind,7750,400.4
+4,T4: long+wind,8000,362.8
+4,T4: long+wind,8250,394.4
+4,T4: long+wind,8500,368.2
+4,T4: long+wind,8750,348.0
+4,T4: long+wind,9000,368.6
+4,T4: long+wind,9250,353.6
+4,T4: long+wind,9500,347.4
+4,T4: long+wind,9750,403.0
+4,T4: long+wind,10000,402.8
+4,T4: long+wind,10250,363.0
+4,T4: long+wind,10500,393.2
+4,T4: long+wind,10750,375.0
+4,T4: long+wind,11000,361.4
+4,T4: long+wind,11250,395.0
+4,T4: long+wind,11500,387.6
+4,T4: long+wind,11750,365.4
+4,T4: long+wind,12000,394.2
+4,T4: long+wind,12250,397.2
+4,T4: long+wind,12500,383.6
+4,T4: long+wind,12750,398.6
+4,T4: long+wind,13000,396.4
+4,T4: long+wind,13250,404.0
+4,T4: long+wind,13500,399.4
+4,T4: long+wind,13750,368.0
+4,T4: long+wind,14000,387.0
+4,T4: long+wind,14250,359.8
+4,T4: long+wind,14500,390.6
+4,T4: long+wind,14750,395.4
+4,T4: long+wind,15000,351.0
+4,T4: long+wind,15250,346.4
+4,T4: long+wind,15500,364.8
+4,T4: long+wind,15750,337.0
+4,T4: long+wind,16000,338.6
+4,T4: long+wind,16250,352.4
+4,T4: long+wind,16500,402.2
+4,T4: long+wind,16750,359.4
+4,T4: long+wind,17000,358.6
+4,T4: long+wind,17250,401.6
+4,T4: long+wind,17500,393.2
+4,T4: long+wind,17750,366.6
+4,T4: long+wind,18000,383.8
+4,T4: long+wind,18250,362.0
+4,T4: long+wind,18500,388.8
+4,T4: long+wind,18750,376.8
+4,T4: long+wind,19000,363.6
+4,T4: long+wind,19250,390.6
+4,T4: long+wind,19500,376.6
+4,T4: long+wind,19750,374.6
+4,T4: long+wind,20000,391.8
+4,T4: long+wind,20250,365.2
+4,T4: long+wind,20500,377.8
+4,T4: long+wind,20750,397.2
+4,T4: long+wind,21000,378.8
+4,T4: long+wind,21250,386.2
+4,T4: long+wind,21500,340.8
+4,T4: long+wind,21750,379.4
+4,T4: long+wind,22000,358.4
+4,T4: long+wind,22250,370.2
+4,T4: long+wind,22500,321.4
+4,T4: long+wind,22750,382.8
+4,T4: long+wind,23000,336.8
+4,T4: long+wind,23250,386.4
+4,T4: long+wind,23500,407.6
+4,T4: long+wind,23750,395.2
+4,T4: long+wind,24000,391.0
+4,T4: long+wind,24250,356.2
+4,T4: long+wind,24500,394.4
+4,T4: long+wind,24750,391.0
+4,T4: long+wind,25000,348.6
