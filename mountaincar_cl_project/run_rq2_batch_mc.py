@@ -10,11 +10,11 @@ SEEDS = [0, 1, 2]
 # 2. 漂移类型：RQ2 主要关注 'abrupt' (突变) 场景
 DRIFT_TYPE = "abrupt" 
 
-# 3. 训练参数 (中等训练量 - 50K步验证)
-# 总步数 50,000 (5个任务 * 10,000步)
-TOTAL_STEPS = "50000"      
-STEPS_PER_TASK = "10000"    
-EVAL_FREQ = "500"           # 评估频率（每500步评估一次）
+# 3. 训练参数 (完整训练 - 100K步)
+# 总步数 100,000 (5个任务 * 20,000步)
+TOTAL_STEPS = "100000"      
+STEPS_PER_TASK = "20000"    
+EVAL_FREQ = "1000"          # 评估频率（每1000步评估一次）
 PAUSE_POLICY = "egp"        # 暂停策略
 
 # 4. EWC 参数
