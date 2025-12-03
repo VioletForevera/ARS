@@ -941,6 +941,9 @@ def evaluate_on_all_tasks(model: nn.Module, task_scheduler: TaskScheduler,
         if episode_rewards:
             results[task_id] = float(np.mean(episode_rewards))
     
+    # 调试输出
+    print(f"[DEBUG] evaluate_on_all_tasks 返回: {results}")
+    
     return results
 
 
@@ -1047,6 +1050,10 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_pa
                 # == 上帝视角评估逻辑 BEGIN ==
                 print(f"\n[评估] 任务切换前全任务评估 (Step {global_step})...")
                 task_rewards = evaluate_on_all_tasks(model, task_scheduler, episodes_per_task=eval_episodes, seed=seed)
+                print(f"[DEBUG] task_rewards 字典: {task_rewards}")
+                print(f"[DEBUG] current_task_id: {current_task_id}, new_task_id: {new_task_id}")
+                print(f"[DEBUG] task_baselines: {task_baselines}")
+                print(f"[DEBUG] seen_tasks: {seen_tasks}")
                 
                 # 1. 记录刚结束任务的 Baseline
                 if current_task_id not in task_baselines:
@@ -1054,6 +1061,7 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_pa
                     if baseline is not None:
                         task_baselines[current_task_id] = baseline
                         metrics_tracker.record_task_performance(current_task_id, after_perf=baseline)
+                        print(f"[DEBUG] 记录任务 {current_task_id} baseline: {baseline}")
                 
                 # 2. 计算已见过任务的 CF
                 for t in seen_tasks:
@@ -1071,7 +1079,7 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=200, config_pa
                     }
                     print(f"[CF] 任务 {t} 在训练任务 {current_task_id} 后性能变化: {cf:.2f}")
                 
-                # 3. 记录新任务的 Forward Transfer (Zero-shot)
+                # 3.记录新任务的 Forward Transfer (Zero-shot)
                 zero_shot = task_rewards.get(new_task_id)
                 if zero_shot is not None:
                     print(f"[Forward Transfer] 任务 {new_task_id} Zero-shot 性能: {zero_shot:.2f}")
