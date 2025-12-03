@@ -1548,14 +1548,6 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=500, config_pa
         # 暂停策略判断
         if pause_policy == 'egp':
             pause, Z, trig_id = entropy_gate.step(H)
-            # === EWC 触发逻辑 (新增) ===
-            if enable_ewc and pause and trig_id > last_trig_id:
-                print(f"\n[EWC] 触发巩固! Step {global_step} (Entropy Trigger #{trig_id})")
-                if len(replay_buffer) >= batch_size:
-                    sample_size = min(len(replay_buffer), 128)
-                    fisher_samples = random.sample(replay_buffer, sample_size)
-                    ewc.update_fisher(model, fisher_samples)
-                last_trig_id = trig_id
         elif pause_policy == 'fixed':
             fixed_global_step += 1
             if fixed_countdown > 0:
@@ -1571,6 +1563,15 @@ def train_online_stream(total_steps=100000, max_steps_per_episode=500, config_pa
                 pause, Z, trig_id = False, 0.0, fixed_triggers
         else:  # 'none'
             pause, Z, trig_id = False, 0.0, 0
+        
+        # === EWC 触发逻辑 (统一处理，支持 egp 和 fixed 策略) ===
+        if enable_ewc and pause and trig_id > last_trig_id:
+            print(f"\n[EWC] 触发巩固! Step {global_step} (Trigger #{trig_id}, Policy={pause_policy})")
+            if len(replay_buffer) >= batch_size:
+                sample_size = min(len(replay_buffer), 128)
+                fisher_samples = random.sample(replay_buffer, sample_size)
+                ewc.update_fisher(model, fisher_samples)
+            last_trig_id = trig_id
         
         # 执行动作
         next_obs, reward, terminated, truncated, _ = env.step(action)
@@ -1841,7 +1842,12 @@ def main():
             # 根据是否启用EWC选择不同的保存目录
             if args.enable_ewc:
                 # 带EWC的实验数据保存在 runs 目录下
-                run_dir = os.path.join(base_dir, "runs", args.drift_type, args.pause_policy, f"seed_{args.seed}")
+                # 特殊处理：Fixed + EWC 使用单独的文件夹避免覆盖 Fixed only 数据
+                if args.pause_policy == 'fixed':
+                    policy_folder = 'fixed_ewc'
+                else:
+                    policy_folder = args.pause_policy
+                run_dir = os.path.join(base_dir, "runs", args.drift_type, policy_folder, f"seed_{args.seed}")
             else:
                 # 不带EWC的实验数据保存在 runs_cartpole_No_EWC 目录下
                 run_dir = os.path.join(base_dir, "runs_cartpole_No_EWC", args.drift_type, args.pause_policy, f"seed_{args.seed}")
