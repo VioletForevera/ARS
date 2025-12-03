@@ -24,42 +24,42 @@
     "task_id": 1,
     "new_task_id": 4,
     "before_performance": -200.0,
-    "after_performance": -189.4,
-    "cf": 10.599999999999994
+    "after_performance": -112.8,
+    "cf": 87.2
   },
   "2_after_4": {
     "task_id": 2,
     "new_task_id": 4,
     "before_performance": -200.0,
-    "after_performance": -189.0,
-    "cf": 11.0
+    "after_performance": -137.0,
+    "cf": 63.0
   },
   "3_after_4": {
     "task_id": 3,
     "new_task_id": 4,
     "before_performance": -200.0,
-    "after_performance": -104.0,
-    "cf": 96.0
+    "after_performance": -85.4,
+    "cf": 114.6
   },
   "2_after_1": {
     "task_id": 2,
     "new_task_id": 1,
     "before_performance": -200.0,
-    "after_performance": -163.8,
-    "cf": 36.19999999999999
+    "after_performance": -148.8,
+    "cf": 51.19999999999999
   },
   "3_after_1": {
     "task_id": 3,
     "new_task_id": 1,
     "before_performance": -200.0,
-    "after_performance": -94.4,
-    "cf": 105.6
+    "after_performance": -81.0,
+    "cf": 119.0
   },
   "4_after_1": {
     "task_id": 4,
     "new_task_id": 1,
-    "before_performance": -143.4,
-    "after_performance": -95.6,
-    "cf": 47.80000000000001
+    "before_performance": -92.8,
+    "after_performance": -91.2,
+    "cf": 1.5999999999999943
   }
 }
